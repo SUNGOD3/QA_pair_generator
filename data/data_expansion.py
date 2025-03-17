@@ -3,6 +3,10 @@ import random
 import re
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from transformers import pipeline
+
+summarizer = pipeline("summarization")
+qa_generator = pipeline("text2text-generation", model="valhalla/t5-base-qg-hl", tokenizer="t5-base", use_fast=False)
 
 def expand_data(dataset, config):
     """
@@ -58,35 +62,76 @@ def expand_case_by_case(qa_pair, current_type, target_type, config):
         return generator_Q_pair_from_context(qa_pair, config)
     return []  # Skip if not implemented yet
 
+# 生成完整 QA 配對
 def generator_QA_pair_from_context(qa_pair, config):
+    method = {
+        "generate_fill_in_blank": generate_fill_in_blank,
+        "generate_causal_qa": generate_causal_qa,
+        "generate_logical_qa": generate_logical_qa
+    }
     new_qa_pairs = []
-    if config["extract_key_sentences"]:
-        new_qa_pairs += extract_key_sentences(copy.deepcopy(qa_pair))
-    #if config["generate_summary_question"]:
-    #    new_qa_pairs += generate_summary_question(qa_pair)
-    #if config["generate_entity_based_QA"]:
-    #    new_qa_pairs += generate_entity_based_QA(qa_pair)
-    #if config["generate_cause_effect_QA"]:
-    #    new_qa_pairs += generate_cause_effect_QA(qa_pair)
+    for key, value in method.items():
+        if config.get(key):
+            new_qa_pairs += value(copy.deepcopy(qa_pair))
     return new_qa_pairs
 
+# 生成只包含問題的 QA 配對
 def generator_Q_pair_from_context(qa_pair, config):
+    method = {
+        "extract_key_sentences": extract_key_sentences,
+        "generate_summary_qa": generate_summary_qa
+    }
     new_qa_pairs = []
-    if config["generate_fill_in_blank"]:
-        new_qa_pairs += generate_fill_in_blank(copy.deepcopy(qa_pair))
+    for key, value in method.items():
+        if config.get(key):
+            new_qa_pairs += value(copy.deepcopy(qa_pair))
     return new_qa_pairs
 
 def extract_key_sentences(qa_pair):
+    '''
+    生成問答對，問題是關鍵句子的意思
+    '''
     sentences =  qa_pair.context_keywords
     if not sentences:
         return []
     key_sentence = random.choice(sentences)
     question = f"根據內容，{key_sentence} 是什麼意思？"
     qa_pair.set_question(question)
-    answer = key_sentence # TODO: Implement actual keyword extraction
-    qa_pair.set_answer(answer)
     return [qa_pair]
 
+# 方法 1: 生成摘要型問答
+def generate_summary_qa(qa_pair):
+    summarized_text = summarizer(qa_pair.context, max_length=50, min_length=20, do_sample=False)[0]['summary_text']
+    question = f"根據內容，總結的關鍵資訊是什麼？"
+    qa_pair.set_question(question)
+    qa_pair.set_answer(summarized_text)
+    return [qa_pair]
+
+# 方法 2: 生成類比問答
+def generate_analogy_qa(qa_pair):
+    keywords = qa_pair.context_keywords
+    if len(keywords) < 2:
+        return []
+    analogy = f"{keywords[0]} 和 {keywords[1]} 有什麼相似之處？"
+    qa_pair.set_question(analogy)
+    qa_pair.set_answer("兩者都涉及...")
+    return [qa_pair]
+
+# 方法 3: 生成邏輯推理問答
+def generate_logical_qa(qa_pair):
+    logical_question = f"如果 {qa_pair.context} 成立，那麼會發生什麼？"
+    qa_pair.set_question(logical_question)
+    qa_pair.set_answer("可能的結果是...")
+    return [qa_pair]
+
+# 方法 4: 生成因果關係問答
+def generate_causal_qa(qa_pair):
+    causal_question = f"為什麼 {qa_pair.context} 會發生？"
+    qa_pair.set_question(causal_question)
+    qa_pair.set_answer("可能的原因包括...")
+    return [qa_pair]
+
+# 方法 5: 生成填空題
 def generate_fill_in_blank(qa_pair):
     context = qa_pair.context
     words = word_tokenize(context)
@@ -96,35 +141,5 @@ def generate_fill_in_blank(qa_pair):
     blank_word = random.choice(words)
     question = context.replace(blank_word, "____")
     qa_pair.set_question(question)
+    qa_pair.set_answer(blank_word)
     return [qa_pair]
-
-#def generate_summary_question(context, sentences):
-#    if len(sentences) < 2:
-#        return []
-#    summary = sentences[0]  # 取第一句作為摘要
-#    question = f"這段話的主要內容是什麼？"
-
-
-#def generate_entity_based_QA(context, sentences):
-#    entities = re.findall(r"\b[A-Z][a-z]+\b", context)
-#    if not entities:
-#        return []
-#    entity = random.choice(entities)
-#    question = f"{entity} 是什麼？"
-#    return [QAPair(question, entity, context)]
-
-# 方法5: 因果關係問答
-#def generate_cause_effect_QA(context, sentences):
-#    cause_effect_patterns = [
-#        r"(.*)因為(.*)",
-#        r"(.*)導致(.*)",
-#        r"(.*)所以(.*)",
-#        r"(.*)結果是(.*)"
-#    ]
-#    for sentence in sentences:
-##        for pattern in cause_effect_patterns:
- #           match = re.search(pattern, sentence)
- #           if match:
- #               cause, effect = match.groups()
- ##               question = f"為什麼 {effect.strip()} ？"
-  #  return []
