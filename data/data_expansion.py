@@ -65,9 +65,7 @@ def expand_case_by_case(qa_pair, current_type, target_type, config):
 # 生成完整 QA 配對
 def generator_QA_pair_from_context(qa_pair, config):
     method = {
-        "generate_fill_in_blank": generate_fill_in_blank,
-        "generate_causal_qa": generate_causal_qa,
-        "generate_logical_qa": generate_logical_qa
+        "generate_fill_in_blank": generate_fill_in_blank
     }
     new_qa_pairs = []
     for key, value in method.items():
@@ -117,19 +115,6 @@ def generate_analogy_qa(qa_pair):
     qa_pair.set_answer("兩者都涉及...")
     return [qa_pair]
 
-# 方法 3: 生成邏輯推理問答
-def generate_logical_qa(qa_pair):
-    logical_question = f"如果 {qa_pair.context} 成立，那麼會發生什麼？"
-    qa_pair.set_question(logical_question)
-    qa_pair.set_answer("可能的結果是...")
-    return [qa_pair]
-
-# 方法 4: 生成因果關係問答
-def generate_causal_qa(qa_pair):
-    causal_question = f"為什麼 {qa_pair.context} 會發生？"
-    qa_pair.set_question(causal_question)
-    qa_pair.set_answer("可能的原因包括...")
-    return [qa_pair]
 
 # 方法 5: 生成填空題
 def generate_fill_in_blank(qa_pair):
