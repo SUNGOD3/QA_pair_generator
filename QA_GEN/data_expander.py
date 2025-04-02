@@ -22,6 +22,10 @@ class DataExpander:
         """
         self.data_expansion_methods = {
             "context_to_qa": [(1, 7)],
+            "key_sentences_question": [(1, 3)],
+            "generate_summary_question": [(1, 3)],
+            "generate_summary_qa": [(1, 7)],
+            "generate_fill_in_blank": [(1, 7)],
         }
 
     def expand_data(self, dataset: QADataset, config) -> QADataset:
@@ -57,7 +61,7 @@ class DataExpander:
                             print("Using Method name:", method_name)
                             expanded_entry = method_info['func']([qa_pair], config)
                             for entry in expanded_entry:
-                                entry.edges.append(qa_pair.id)
+                                entry.add_edge(qa_pair.id)
                                 expanded_dataset.add(entry)
         
         return expanded_dataset
@@ -82,6 +86,6 @@ class DataExpander:
         if not (target_type & 4):  # Answer
             new_pair.answer = None
         
-        new_pair.edges.append(qa_pair.id)
+        new_pair.add_edge(qa_pair.id)
         return new_pair
     

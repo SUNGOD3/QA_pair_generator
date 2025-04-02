@@ -60,6 +60,8 @@ class Pipeline:
                 response_text, response_info = llm(prompt=prompt)
                 response_text = response_text.strip()
                 response_text = response_text.strip('.,!?')
+                if len(response_text) > 3:
+                    response_text = response_text[:3]
                 if response_text.lower() == 'yes' or response_text.lower() == 'y' or response_text.lower() == 'true':
                     self.methods_registered[name] = True
                     print(f"  Method '{name}' added to dataset.")

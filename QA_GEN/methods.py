@@ -1,7 +1,10 @@
 from typing import Any, Callable, Dict, List
 from .base import QAPair
 from .llms.oai_chat import OpenAIChat
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 import re
+import random
 
 class Method:
     """
@@ -85,18 +88,7 @@ class Method:
     use_LLM=True
 )
 def context_to_qa(qa_pairs: List[QAPair], config) -> List[QAPair]:
-    """
-    Generate full QA pairs from context-only entries.
-    
-    Args:
-        qa_pairs (List[QAPair]): Input QA pairs
-        config : Configuration for this method
-    
-    Returns:
-        List[QAPair]: Expanded QA pairs
-    """
     expanded_pairs = []
-
     for context_pair in qa_pairs:
         if context_pair.classify_id() == 1:  # Context-only type
             llm = OpenAIChat()
@@ -126,6 +118,77 @@ Context: {context_pair.context}
                 print("Parsing failed:", response_text)
     return expanded_pairs
 
+
+@Method(
+    name="key_sentences_question",
+    description="Generate only questions based on key sentences",
+    applicable_stages=["data_expansion"],
+    use_LLM=False
+)
+def key_sentences_question(qa_pairs, config):
+    rt_pairs = []
+    for qa_pair in qa_pairs:
+        sentences =  qa_pair.context_keywords
+        if not sentences:
+            return []
+        key_sentence = random.choice(sentences)
+        question = f"Based on the content, what does '{key_sentence}' mean?"
+        qa_pair.set_question(question)
+        rt_pairs.append(qa_pair)
+    return rt_pairs
+
+@Method(
+    name="generate_summary_question",
+    description="Generate summary questions, where the question is about the summary of the content",
+    applicable_stages=["data_expansion"],
+    use_LLM=False
+)
+def generate_summary_question(qa_pairs, config):
+    rt_pairs = []
+    for qa_pair in qa_pairs:
+        question = f"Based on the content, what is the key information summarized?"
+        qa_pair.set_question(question)
+        rt_pairs.append(qa_pair)
+    return rt_pairs
+
+@Method(
+    name="generate_summary_qa",
+    description="Generate summary-type QA pairs, where the question is about the summary of the content",
+    applicable_stages=["data_expansion"],
+    use_LLM=True
+)
+def generate_summary_qa(qa_pairs, config):
+    rt_pairs = []
+    llm = OpenAIChat()
+    question = f"Based on the content, what is the key information summarized?"
+    for qa_pair in qa_pairs:
+        qa_pair.set_question(question)
+        response_text, response_info = llm(prompt=qa_pair.context + '\n' + question)
+        summarized_text = response_text.strip()
+        qa_pair.set_answer(summarized_text)
+        rt_pairs.append(qa_pair)
+    return rt_pairs
+
+@Method(
+    name="generate_fill_in_blank",
+    description="Generate fill-in-the-blank type QA pairs",
+    applicable_stages=["data_expansion"],
+    use_LLM=False
+)
+def generate_fill_in_blank(qa_pairs, config):
+    rt_pairs = []
+    for qa_pair in qa_pairs:
+        context = qa_pair.context
+        words = word_tokenize(context)
+        words = [w for w in words if w.isalnum() and w.lower() not in stopwords.words("english")]
+        if not words:
+            return []
+        blank_word = random.choice(words)
+        question = context.replace(blank_word, "____")
+        qa_pair.set_question(question)
+        qa_pair.set_answer(blank_word)
+        rt_pairs.append(qa_pair)
+    return rt_pairs
 
 print("Methods registered:")
 for name, method in Method.get_methods().items():
