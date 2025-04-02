@@ -1,3 +1,8 @@
 gradio
 nltk
 transformers
+openai
+groq
+together
+anthropic
+google-api-core
