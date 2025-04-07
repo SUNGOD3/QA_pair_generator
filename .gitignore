@@ -1,3 +1,4 @@
 /stream-bench/
 /stream-bench/*
 __pycache__/
+/graphs/

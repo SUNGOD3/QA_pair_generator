@@ -10,7 +10,7 @@ class DataExpander:
 
     def __init__(self):
         """
-        Since the data expansion method has more detailed classification (adj list), another dictionary is needed to record
+        Since the data expansion method has more detailed classification, another dictionary is needed to record
         {method_name: {pair_list [{from, to}, {from, to}, ...]}}
         "Document": 1,
         "Question": 2,
@@ -61,7 +61,7 @@ class DataExpander:
                             print("Using Method name:", method_name)
                             expanded_entry = method_info['func']([qa_pair], config)
                             for entry in expanded_entry:
-                                entry.add_edge(qa_pair.id)
+                                entry.add_edge(qa_pair.id, "expanded")
                                 expanded_dataset.add(entry)
         
         return expanded_dataset
@@ -86,6 +86,6 @@ class DataExpander:
         if not (target_type & 4):  # Answer
             new_pair.answer = None
         
-        new_pair.add_edge(qa_pair.id)
+        new_pair.add_edge(qa_pair.id, "reduced")
         return new_pair
     

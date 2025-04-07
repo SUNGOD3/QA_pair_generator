@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List, Tuple
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
@@ -15,7 +15,7 @@ class QAPair:
         self.set_answer(answer)
         self.set_context(context)
         self.set_question(question)
-        self.edges = []
+        self.edges = []  # Will now store (method_name, target_id) tuples
 
     def extract_keywords(self, text):
         '''
@@ -44,9 +44,31 @@ class QAPair:
         self.answer = answer
         self.answer_keywords = self.extract_keywords(answer)
 
-    def add_edge(self, target_id):
-        if target_id not in self.edges:
-            self.edges.append(target_id)
+    def add_edge(self, target_id, method_name="default"):
+        """
+        Add an edge to the target ID with a specified method name.
+        
+        Args:
+            target_id: The ID of the target QAPair
+            method_name: A string indicating the method used for edge creation
+        """
+        edge = (method_name, target_id)
+        if edge not in self.edges:
+            self.edges.append(edge)
+
+    def get_edges_by_method(self, method_name=None):
+        """
+        Get all edges or edges with a specific method name.
+        
+        Args:
+            method_name: If provided, returns only edges with this method name
+            
+        Returns:
+            A list of target IDs or (method_name, target_id) tuples
+        """
+        if method_name is None:
+            return self.edges
+        return [target_id for method, target_id in self.edges if method == method_name]
 
     def classify(self):
         '''
@@ -112,11 +134,24 @@ class QADataset:
             id_mapping[qa_pair.id] = new_id
             qa_pair.id = new_id
             new_data[new_id] = qa_pair
+        
+        # Update edges with the new IDs
         for qa in new_data.values():
-            qa.edges = [id_mapping[old_id] for old_id in qa.edges if old_id in id_mapping]
+            new_edges = []
+            for edge in qa.edges:
+                if isinstance(edge, tuple) and len(edge) == 2:
+                    # Handle the case where edge is already (method_name, target_id)
+                    method_name, old_id = edge
+                    if old_id in id_mapping:
+                        new_edges.append((method_name, id_mapping[old_id]))
+                else:
+                    # Handle legacy edge format (just ID)
+                    old_id = edge
+                    if old_id in id_mapping:
+                        new_edges.append(("default", id_mapping[old_id]))
+            qa.edges = new_edges
 
         self.data = new_data
-
 
     def get(self, id):
         if id in self.data:
@@ -131,19 +166,27 @@ class QADataset:
         new_qa_pair.id = new_id
         self.data[new_id] = new_qa_pair
 
-    def add_edge(self, source_id, target_id):
+    def add_edge(self, source_id, target_id, method_name="default"):
+        """
+        Add an edge from source to target with the specified method name.
+        
+        Args:
+            source_id: ID of the source QAPair
+            target_id: ID of the target QAPair
+            method_name: String indicating the method used for edge creation
+        """
         if source_id in self.data and target_id in self.data:
-            self.data[source_id].add_edge(target_id)
+            self.data[source_id].add_edge(target_id, method_name)
 
     def filter_by_type(self, qa_type: str):
-        return [qa for qa in self.data if qa.classify() == qa_type]
+        return [qa for qa in self.data.values() if qa.classify() == qa_type]
 
     def get_statistics(self):
         '''
         Return the count of each type of QA pair in the dataset.
         '''
         stats = {}
-        for qa in self.data:
+        for qa in self.data.values():
             qa_type = qa.classify()
             stats[qa_type] = stats.get(qa_type, 0) + 1
         return stats
