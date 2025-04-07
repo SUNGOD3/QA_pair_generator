@@ -3,6 +3,7 @@ from .base import QAPair, QADataset
 from .methods import Method
 from .data_expander import DataExpander
 from .llms.oai_chat import OpenAIChat
+from .edge_builder import EdgeBuilder
 
 class Pipeline:
     """
@@ -95,6 +96,19 @@ class Pipeline:
 
     def build_knowledge_graph(self, dataset: QADataset, params: dict):
         print("Building knowledge graph...")
+        edge_builder = EdgeBuilder(dataset)
+
+        # Build edges automatically
+        edge_builder.build_cosine_similarity_edges()
+        edge_builder.build_keyword_overlap_edges()
+
+        # Visualize all graphs separately
+        edge_builder.visualize_all_graphs()
+
+        # Visualize a combined graph
+        edge_builder.visualize_combined_graph()
+        stats = edge_builder.get_graph_statistics()
+        print("Graph Statistics:", stats)
         return dataset
 
     def combination_segmentation(self, dataset: QADataset, params: dict):
