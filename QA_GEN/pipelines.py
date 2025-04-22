@@ -1,9 +1,11 @@
+#pipeline.py
 from typing import List, Dict, Callable, Optional, Any
 from .base import QAPair, QADataset
 from .methods import Method
 from .data_expander import DataExpander
 from .llms.oai_chat import OpenAIChat
 from .edge_builder import EdgeBuilder
+from .data_fusioner import DataFusioner
 
 class Pipeline:
     """
@@ -18,7 +20,7 @@ class Pipeline:
         self.stages = [
             "data_expansion", 
             "build_knowledge_graph", 
-            "combination_segmentation", 
+            "data_fusion", 
             "filter_data",
             "data_augmentation"
         ]
@@ -43,6 +45,7 @@ class Pipeline:
         for stage in self.stages:
             print(f"Running stage: {stage}")
             dataset = getattr(self, stage)(dataset, config)
+            print(f"Size of dataset after {stage}: {len(dataset)}")
         
         print("Processing completed.")
         return dataset
@@ -111,9 +114,22 @@ class Pipeline:
         print("Graph Statistics:", stats)
         return dataset
 
-    def combination_segmentation(self, dataset: QADataset, params: dict):
-        print("Running combination & segmentation...")
-        return dataset
+    def data_fusion(self, dataset: QADataset, params: dict):
+        print("Running data_fusion...")
+        
+        # Get fusion methods from registered Methods
+        fusion_methods = []
+        for method_name, method_info in Method.get_methods().items():
+            if 'data_fusion' in method_info['applicable_stages'] and self.methods_registered.get(method_name, True):
+                fusion_methods.append(method_name)
+        
+        # Initialize DataFusioner
+        fusioner = DataFusioner()
+        
+        # Fuse data using the registered methods
+        fused_dataset = fusioner.fuse_data(dataset, fusion_methods, params)
+        
+        return fused_dataset
 
     def filter_data(self, dataset: QADataset, params: dict):
         print("Filtering data...")
