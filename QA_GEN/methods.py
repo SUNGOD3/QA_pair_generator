@@ -303,7 +303,7 @@ def cross_domain_fusion(qa_pairs: List[QAPair], config) -> List[QAPair]:
     # Create prompt for LLM
     llm = OpenAIChat()
     prompt = f"""
-You are an expert at creating educational content that bridges multiple domains or topics.
+You are an expert at creating content that bridges multiple domains or topics.
 I'll show you two different QA pairs that have some moderate relationship, and I want you to create a new, 
 original QA pair that creatively combines elements from both sources.
 
@@ -319,9 +319,8 @@ Answer: {pair2.answer}
 
 Create a new QA pair that bridges these two topics or domains. The new QA pair should:
 1. Identify a conceptual link or relationship between these two areas
-2. Draw knowledge from both sources
-3. Create something novel that couldn't be derived from either source alone
-4. Be factually accurate and educational
+2. Create something novel that couldn't be derived from either source alone
+3. Be factually accurate
 
 Please provide your response in this format:
 Context: (a bridge context that connects elements from both sources)

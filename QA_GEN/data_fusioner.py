@@ -144,13 +144,14 @@ class DataFusioner:
         # For each QA pair in the dataset, try each fusion method
         for source_pair in dataset:
             for method_name, method_info in available_methods.items():
-                print(f"Applying fusion method: {method_name} to pair {source_pair.id}")
+                
                 
                 # Get relevant pairs using the retriever for this method
                 relevant_pairs = self.retrieve_relevant_pairs(
                     dataset, source_pair.id, method_name
                 )
-                
+                print(f"Applying fusion method: {method_name} to pair {source_pair.id} with {len(relevant_pairs)} relevant pairs.")
+                print(f"Relevant pairs: {[pair.id for pair in relevant_pairs]}")
                 if not relevant_pairs:
                     continue
                     
@@ -278,9 +279,10 @@ class DataFusioner:
             return random.sample(candidates, max_pairs)
         return candidates
 
-    def few_shot_retriever(self, dataset: QADataset, source_id: int, max_pairs: int = 5) -> List[QAPair]:
+    def few_shot_retriever(self, dataset: QADataset, source_id: int, max_pairs: int = 3) -> List[QAPair]:
         """
-        Retrieve pairs with a similar question/answer structure for few-shot learning.
+        Retrieve pairs with a similar question/answer structure for few-shot learning,
+        while avoiding pairs that are direct expansions/reductions of the source pair.
         
         Args:
             dataset (QADataset): The dataset to search in
@@ -294,20 +296,66 @@ class DataFusioner:
         if not source_pair:
             return []
         
+        # Track pairs to exclude (direct expansions or reductions of source_pair)
+        excluded_ids = {source_id}
+        
+        # Find pairs that are directly connected via expanded/reduced edges
+        for qa_pair in dataset:
+            # Check if this pair is derived from our source pair
+            if source_id in qa_pair.get_edges_by_method("expanded") or source_id in qa_pair.get_edges_by_method("reduced"):
+                excluded_ids.add(qa_pair.id)
+            
+            # Check if our source pair is derived from this pair
+            if qa_pair.id in source_pair.get_edges_by_method("expanded") or qa_pair.id in source_pair.get_edges_by_method("reduced"):
+                excluded_ids.add(qa_pair.id)
+        
+        # Function to check text similarity between two strings
+        def is_text_similar(text1, text2):
+            # If either is None, they can't be similar
+            if not text1 or not text2:
+                return False
+            
+            # Clean and normalize texts for comparison
+            text1 = text1.lower().strip()
+            text2 = text2.lower().strip()
+            
+            # If one is a substring of the other, they're too similar
+            if text1 in text2 or text2 in text1:
+                return True
+            
+            # Calculate simple similarity metric (e.g., content overlap)
+            t1_words = set(text1.split())
+            t2_words = set(text2.split())
+            overlap = len(t1_words.intersection(t2_words))
+            
+            # If over 99% words are common, too similar
+            max_words = max(len(t1_words), len(t2_words))
+            if max_words > 0 and overlap / max_words > 0.99:
+                return True
+                
+            return False
+        
+        # Check content similarity to exclude too-similar pairs
+        for qa_pair in dataset:
+            if qa_pair.id in excluded_ids:
+                continue
+                
+            # Check for high content similarity in context, question, or answer
+            context_similar = is_text_similar(source_pair.context, qa_pair.context) if source_pair.context and qa_pair.context else False
+            question_similar = is_text_similar(source_pair.question, qa_pair.question) if source_pair.question and qa_pair.question else False
+            answer_similar = is_text_similar(source_pair.answer, qa_pair.answer) if source_pair.answer and qa_pair.answer else False
+            
+            # If any component is too similar, exclude this pair
+            if context_similar or question_similar or answer_similar:
+                excluded_ids.add(qa_pair.id)
+        
         # First priority: pairs connected by cosine similarity or keyword overlap
         target_ids = set()
         target_ids.update(source_pair.get_edges_by_method("cosine_similarity"))
         target_ids.update(source_pair.get_edges_by_method("keyword_overlap"))
         
-        # If we don't have enough, find pairs with similar question types
-        if len(target_ids) < max_pairs:
-            # Try to find QA pairs with similar structure
-            source_type = source_pair.classify_id()
-            for qa_pair in dataset:
-                if qa_pair.id != source_id and qa_pair.classify_id() == source_type:
-                    target_ids.add(qa_pair.id)
-                    if len(target_ids) >= max_pairs:
-                        break
+        # Remove excluded IDs
+        target_ids = target_ids - excluded_ids
         
         # Convert to list and limit to max_pairs
         target_ids_list = list(target_ids)
@@ -318,8 +366,8 @@ class DataFusioner:
     
     def cross_domain_retriever(self, dataset: QADataset, source_id: int, max_pairs: int = 1) -> List[QAPair]:
         """
-        Retrieve a QA pair that is somewhat related but from a different domain
-        or context compared to the source pair.
+        Retrieve QA pairs that are somewhat related but from a different domain
+        or context compared to the source pair, using percentage-based overlap.
         
         Args:
             dataset (QADataset): The dataset to search in
@@ -332,7 +380,6 @@ class DataFusioner:
         source_pair = dataset.get(source_id)
         if not source_pair:
             return []
-        
         # Create a set of keywords from the source pair
         source_keywords = set()
         if source_pair.context_keywords:
@@ -360,25 +407,24 @@ class DataFusioner:
                 candidate_keywords.update(qa_pair.question_keywords)
             if qa_pair.answer_keywords:
                 candidate_keywords.update(qa_pair.answer_keywords)
-                
-            # Calculate overlap
-            overlap = len(source_keywords.intersection(candidate_keywords))
             
-            # We want some overlap, but not too much
-            # Adjust these thresholds based on your data
-            if 1 <= overlap <= 2:  # Moderate overlap: 1-2 keywords in common
-                candidates.append((qa_pair, overlap))
-        
-        # Sort by overlap (ascending, to get less similar pairs first)
-        candidates.sort(key=lambda x: x[1])
+            # Skip if no keywords
+            if not candidate_keywords:
+                continue
+                
+            # Calculate overlap as percentage
+            intersection = source_keywords.intersection(candidate_keywords)
+            
+            # Use Jaccard similarity: intersection / union
+            union = source_keywords.union(candidate_keywords)
+            overlap_percentage = len(intersection) / len(union) if union else 0
+            
+            # We want moderate overlap (adjust these thresholds based on your data)
+            # For example: between 5% and 30% overlap
+            if 0.05 <= overlap_percentage <= 0.3:
+                candidates.append((qa_pair, overlap_percentage))
         
         # Select candidates
         selected = [pair for pair, _ in candidates[:max_pairs]]
-        
-        # If we couldn't find moderately related pairs, fall back to random selection
-        if not selected and len(dataset) > 1:
-            all_pairs = [p for p in dataset if p.id != source_id and p.context and p.question and p.answer]
-            if all_pairs:
-                selected = random.sample(all_pairs, min(max_pairs, len(all_pairs)))
         
         return selected
