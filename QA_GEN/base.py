@@ -191,6 +191,32 @@ class QADataset:
             qa_type = qa.classify()
             stats[qa_type] = stats.get(qa_type, 0) + 1
         return stats
+    
+    def delete(self, ids_to_delete: list[int]):
+        """
+        Delete QAPairs with specified IDs and maintain data integrity.
+        
+        Args:
+            ids_to_delete: List of IDs to delete from the dataset
+        """
+        if not ids_to_delete:
+            return
+        
+        # Convert to set for O(1) lookups
+        ids_to_delete_set = set(ids_to_delete)
+        
+        # Remove entries with the specified IDs
+        remaining_data = {id: qa_pair for id, qa_pair in self.data.items() 
+                        if id not in ids_to_delete_set}
+        
+        # Remove edges pointing to deleted QAPairs
+        for qa_pair in remaining_data.values():
+            qa_pair.edges = [(method, target_id) for method, target_id in qa_pair.edges 
+                            if target_id not in ids_to_delete_set]
+        
+        # reassign IDs and update edges
+        remaining_qa_pairs = list(remaining_data.values())
+        self._initialize_dataset(remaining_qa_pairs)
 
     def __iter__(self):
         return iter(self.data.values())

@@ -6,6 +6,7 @@ from .data_expander import DataExpander
 from .llms.oai_chat import OpenAIChat
 from .edge_builder import EdgeBuilder
 from .data_fusioner import DataFusioner
+from .data_filter import DataFilter
 
 class Pipeline:
     """
@@ -21,7 +22,7 @@ class Pipeline:
             "data_expansion", 
             "build_knowledge_graph", 
             "data_fusion", 
-            "filter_data",
+            "data_filter",
             "data_augmentation"
         ]
         self.methods_registered = {method: False for method in Method.get_methods().keys()}
@@ -131,9 +132,30 @@ class Pipeline:
         
         return fused_dataset
 
-    def filter_data(self, dataset: QADataset, params: dict):
+    def data_filter(self, dataset: QADataset, params: dict):
+        """
+        Filter data stage in the pipeline. Applies registered filter methods to the dataset.
+        
+        Args:
+            dataset (QADataset): Input dataset
+            params (dict): Configuration parameters
+        
+        Returns:
+            QADataset: Filtered dataset
+        """
         print("Filtering data...")
-        return dataset
+        
+        # For debugging purposes, print the original dataset
+        print("Original dataset size:", len(dataset))
+        for qa in dataset:
+            print(qa)
+        
+        # Initialize and run the DataFilter
+        
+        data_filter = DataFilter()
+        filtered_dataset = data_filter.filter_data(dataset, self.methods_registered, params)
+        
+        return filtered_dataset
 
     def data_augmentation(self, dataset: QADataset, params: dict):
         print("Running data augmentation...")
