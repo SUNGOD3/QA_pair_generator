@@ -356,7 +356,7 @@ Answer: (your original answer that incorporates knowledge from both sources)
     name="filter_similar_pairs", 
     description="Filter out similar QA pairs by randomly sampling and comparing pairs using LLM",
     applicable_stages=["data_filter"],
-    use_LLM=True
+    use_LLM=True,
 )
 def filter_similar_pairs(qa_pairs: List[QAPair], config) -> List[QAPair]:
     """
@@ -450,3 +450,204 @@ Are these QA pairs similar or duplicates? (YES/NO)
     filtered_pairs = [pair for i, pair in enumerate(remaining_pairs) if i not in pairs_to_remove]
     
     return filtered_pairs
+
+
+
+@Method(
+    name="filter_exact_substring", 
+    description="Filter out QA pairs where one contains a substantial exact substring of another",
+    applicable_stages=["data_filter"],
+    use_LLM=False
+)
+def filter_exact_substring(qa_pairs: List[QAPair], config) -> List[QAPair]:
+    """
+    Filters out QA pairs where one contains a substantial exact substring of another.
+    For each match, the longer QA pair is removed.
+    
+    Args:
+        qa_pairs: A list of QAPair objects to filter
+        config: Configuration dictionary containing parameter 'k' for minimum substring length
+    
+    Returns:
+        List[QAPair]: Filtered list of QAPair objects with redundant pairs removed
+    """
+    if len(qa_pairs) <= 1:
+        return qa_pairs
+    
+    # Get minimum substring length from config, default to 50 characters
+    min_substring_length = config.get('k', 50)
+    
+    # Create a copy to avoid modifying the original list during iteration
+    pairs_to_remove = set()
+    
+    # Helper function to check for substring match
+    def check_substring_match(text1: str, text2: str) -> bool:
+        """Check if one text contains a substantial substring of the other."""
+        if not text1 or not text2:
+            return False
+            
+        # Check if text1 contains text2 as a substantial substring
+        if text1 != text2 and len(text2) >= min_substring_length and text2 in text1:
+            return True
+            
+        # Check if text2 contains text1 as a substantial substring
+        if text1 != text2 and len(text1) >= min_substring_length and text1 in text2:
+            return True
+            
+        return False
+    
+    # Compare all pairs
+    for i in range(len(qa_pairs)):
+        if i in pairs_to_remove:
+            continue
+            
+        for j in range(i+1, len(qa_pairs)):
+            if j in pairs_to_remove:
+                continue
+                
+            pair1, pair2 = qa_pairs[i], qa_pairs[j]
+            
+            # Extract all text fields from each pair
+            texts1 = [pair1.context or "", pair1.question or "", pair1.answer or ""]
+            texts2 = [pair2.context or "", pair2.question or "", pair2.answer or ""]
+            
+            # Check each combination of text fields for substring matches
+            found_match = False
+            for t1 in texts1:
+                for t2 in texts2:
+                    if check_substring_match(t1, t2):
+                        found_match = True
+                        break
+                if found_match:
+                    break
+            
+            # If a match is found, remove the longer pair
+            if found_match:
+                # Calculate total length of each pair
+                len1 = sum(len(t) for t in texts1)
+                len2 = sum(len(t) for t in texts2)
+                
+                # Remove the longer pair (prioritize keeping shorter content)
+                if len1 > len2:
+                    pairs_to_remove.add(i)
+                else:
+                    pairs_to_remove.add(j)
+    
+    # Create final filtered list
+    filtered_pairs = [pair for idx, pair in enumerate(qa_pairs) if idx not in pairs_to_remove]
+    
+    return filtered_pairs
+
+@Method(
+    name="refine_repeated_content", 
+    description="Refines QA pairs by removing consecutively repeated words or phrases",
+    applicable_stages=["data_filter"],
+    use_LLM=False
+)
+def refine_repeated_content(qa_pairs: List[QAPair], config) -> List[QAPair]:
+    """
+    Refines QA pairs by removing consecutively repeated words or phrases.
+    
+    Args:
+        qa_pairs: A list of QAPair objects to refine
+        config: Configuration dictionary containing parameters
+            - 'min_repetitions': Minimum number of consecutive repetitions to trigger cleanup (default: 2)
+    
+    Returns:
+        List[QAPair]: The same QAPair objects with refined content
+    """
+    # Get config parameters
+    min_repetitions = config.get('min_repetitions', 2)
+    
+    for qa_pair in qa_pairs:
+        # Refine context if it exists
+        if qa_pair.context:
+            qa_pair.set_context(clean_repeated_content(qa_pair.context, min_repetitions))
+        
+        # Refine question if it exists
+        if qa_pair.question:
+            qa_pair.set_question(clean_repeated_content(qa_pair.question, min_repetitions))
+            
+        # Refine answer if it exists
+        if qa_pair.answer:
+            qa_pair.set_answer(clean_repeated_content(qa_pair.answer, min_repetitions))
+    
+    return qa_pairs
+
+def clean_repeated_content(text: str, min_repetitions: int = 2) -> str:
+    """
+    Remove consecutively repeated words or phrases from text.
+    
+    Args:
+        text: The text to clean
+        min_repetitions: Minimum number of consecutive repetitions to trigger cleanup
+    
+    Returns:
+        str: Cleaned text with repetitions removed
+    """
+    if not text:
+        return text
+        
+    # Function to find and remove consecutive repetitions of the same word
+    def clean_repeated_words(text):
+        # Match the same word repeated multiple times (case insensitive)
+        pattern = r'\b(\w+)(?:\s+\1){' + str(min_repetitions-1) + r',}\b'
+        
+        # Find all matches
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+        
+        # Process text from end to start to avoid index issues when replacing
+        for match in reversed(matches):
+            word = match.group(1)
+            start, end = match.span()
+            # Replace with a single instance of the word
+            text = text[:start] + word + text[end:]
+            
+        return text
+    
+    # Function to find and remove longer repeating phrases
+    def clean_repeated_phrases(text, phrase_length):
+        if phrase_length < 2:
+            return text
+            
+        words = text.split()
+        if len(words) < phrase_length * min_repetitions:
+            return text
+            
+        i = 0
+        result = []
+        while i < len(words):
+            # Get current phrase
+            if i + phrase_length > len(words):
+                result.extend(words[i:])
+                break
+                
+            current_phrase = words[i:i+phrase_length]
+            
+            # Count how many times this phrase repeats
+            repetitions = 1
+            while i + (repetitions * phrase_length) + phrase_length <= len(words):
+                next_chunk = words[i+(repetitions*phrase_length):i+(repetitions*phrase_length)+phrase_length]
+                if current_phrase == next_chunk:
+                    repetitions += 1
+                else:
+                    break
+            
+            # If phrase repeats more than min_repetitions, add it only once
+            if repetitions >= min_repetitions:
+                result.extend(current_phrase)
+                i += repetitions * phrase_length
+            else:
+                result.append(words[i])
+                i += 1
+                
+        return ' '.join(result)
+    
+    # Apply cleaning for individual repeated words
+    cleaned = clean_repeated_words(text)
+    
+    # Apply cleaning for repeated phrases (up to 5 words long)
+    for phrase_length in range(2, 6):
+        cleaned = clean_repeated_phrases(cleaned, phrase_length)
+        
+    return cleaned

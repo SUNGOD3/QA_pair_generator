@@ -1,4 +1,3 @@
-#data_filter.py
 from typing import List, Dict, Any, Set
 from collections import deque
 from .base import QADataset, QAPair
@@ -8,15 +7,34 @@ class DataFilter:
     """
     Implements the filtering stage of the QA dataset pipeline.
     Uses registered filter methods to process connected subgraphs in the dataset.
+    Supports both deletion and refinement filter methods.
     """
     
     def __init__(self):
-        """Initialize the DataFilter."""
-        pass
+        """
+        Initialize the DataFilter with predefined method types.
+        Methods are categorized as either deletion or refinement at initialization.
+        """
+        # Define method types
+        self.DELETION_TYPE = "deletion"     # Methods that remove QA pairs
+        self.REFINEMENT_TYPE = "refinement" # Methods that modify QA pairs
         
+        # Predefined categorization of filter methods
+        self.filter_method_types = {
+            # Existing method
+            "filter_similar_pairs": self.DELETION_TYPE,
+            
+            # New methods
+            "filter_exact_substring": self.DELETION_TYPE,
+            "refine_repeated_content": self.REFINEMENT_TYPE,
+            
+            # Add new methods here with their types
+        }
+    
     def filter_data(self, dataset: QADataset, registered_methods: Dict[str, bool], config: Dict[str, Any]) -> QADataset:
         """
         Filter the dataset by applying registered filter methods to connected subgraphs.
+        Applies refinement methods first, then deletion methods.
         
         Args:
             dataset (QADataset): The dataset to filter
@@ -33,7 +51,9 @@ class DataFilter:
         for method_name, method_info in Method.get_methods().items():
             if 'data_filter' in method_info['applicable_stages'] and registered_methods.get(method_name, False):
                 filter_methods.append(method_name)
-                print(f"Using filter method: {method_name}")
+                # Get method type (default to deletion for backward compatibility)
+                method_type = self.filter_method_types.get(method_name, self.DELETION_TYPE)
+                print(f"Using filter method: {method_name} (Type: {method_type})")
         
         if not filter_methods:
             print("No filter methods registered. Skipping filtering stage.")
@@ -43,22 +63,48 @@ class DataFilter:
         subgraphs = self._find_connected_components(dataset)
         print(f"Found {len(subgraphs)} connected subgraphs in the dataset")
         
+        # First apply refinement methods (which modify QA pairs)
+        print("Applying refinement methods...")
+        refinement_methods = [m for m in filter_methods if self.filter_method_types.get(m, self.DELETION_TYPE) == self.REFINEMENT_TYPE]
+        for method_name in refinement_methods:
+            method_func = Method.get_methods()[method_name]['func']
+            print(f"Applying refinement method: {method_name}")
+            
+            # Process each subgraph with the refinement method
+            for i, subgraph_ids in enumerate(subgraphs):
+                print(f"  Processing subgraph {i+1}/{len(subgraphs)} with {len(subgraph_ids)} nodes")
+                
+                # Convert IDs to QAPairs
+                subgraph_pairs = [dataset.get(id) for id in subgraph_ids]
+                
+                # Apply the refinement method
+                refined_pairs = method_func(subgraph_pairs, config)
+                
+                # Update the QA pairs in the dataset
+                for qa_pair in refined_pairs:
+                    if qa_pair.id in dataset.data:
+                        dataset.edit(qa_pair.id, qa_pair=qa_pair)
+        
+        # Then apply deletion methods (which remove QA pairs)
+        print("Applying deletion methods...")
+        deletion_methods = [m for m in filter_methods if self.filter_method_types.get(m, self.DELETION_TYPE) == self.DELETION_TYPE]
+        
         # IDs to delete from the dataset
         ids_to_delete = set()
         
-        # Process each subgraph with the filter methods
+        # Process each subgraph with the deletion methods
         for i, subgraph_ids in enumerate(subgraphs):
             print(f"Processing subgraph {i+1}/{len(subgraphs)} with {len(subgraph_ids)} nodes")
             
             # Convert IDs to QAPairs
             subgraph_pairs = [dataset.get(id) for id in subgraph_ids]
             
-            # Apply each filter method to the subgraph
-            for method_name in filter_methods:
+            # Apply each deletion method to the subgraph
+            for method_name in deletion_methods:
                 method_func = Method.get_methods()[method_name]['func']
                 print(f"  Applying {method_name} to subgraph {i+1}")
                 
-                # Apply the filter method
+                # Apply the deletion method
                 filtered_pairs = method_func(subgraph_pairs, config)
                 
                 # Determine which pairs were removed

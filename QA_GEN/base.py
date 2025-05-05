@@ -218,6 +218,49 @@ class QADataset:
         remaining_qa_pairs = list(remaining_data.values())
         self._initialize_dataset(remaining_qa_pairs)
 
+    def edit(self, id: int, qa_pair: QAPair = None, context: str = None, question: str = None, answer: str = None):
+        """
+        Edit an existing QAPair in the dataset by ID.
+        
+        Args:
+            id: The ID of the QAPair to edit
+            qa_pair: A QAPair object to replace the existing one (optional)
+            context: New context text (optional if qa_pair is provided)
+            question: New question text (optional if qa_pair is provided)
+            answer: New answer text (optional if qa_pair is provided)
+            
+        Returns:
+            bool: True if the edit was successful, False otherwise
+        
+        Note:
+            If qa_pair is provided, it will override any individual field parameters.
+            The ID of the provided qa_pair will be ignored and the original ID maintained.
+        """
+        if id not in self.data:
+            return False
+            
+        if qa_pair:
+            # Create a deep copy to avoid modifying the input qa_pair
+            new_qa_pair = deepcopy(qa_pair)
+            # Preserve the original ID and edges
+            original_id = self.data[id].id
+            original_edges = self.data[id].edges
+            new_qa_pair.id = original_id
+            new_qa_pair.edges = original_edges
+            self.data[id] = new_qa_pair
+        elif context is not None or question is not None or answer is not None:
+            # Update individual fields if provided
+            if context is not None:
+                self.data[id].set_context(context)
+            if question is not None:
+                self.data[id].set_question(question)
+            if answer is not None:
+                self.data[id].set_answer(answer)
+        else:
+            raise ValueError("No valid fields provided to edit.")
+        
+        return True
+
     def __iter__(self):
         return iter(self.data.values())
 
