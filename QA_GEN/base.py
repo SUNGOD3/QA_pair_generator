@@ -79,19 +79,19 @@ class QAPair:
         has_question = self.question is not None
         has_answer = self.answer is not None
 
-        if has_context and not has_question and not has_answer:  # 1 0 0
+        if has_context and not has_question and not has_answer:  # 1 0 0 (1)
             return "Document"
-        elif not has_context and has_question and not has_answer:  # 0 1 0
+        elif not has_context and has_question and not has_answer:  # 0 1 0 (2)
             return "Question"
-        elif not has_context and not has_question and has_answer:  # 0 0 1
+        elif not has_context and not has_question and has_answer:  # 0 0 1 (4)
             return "Ground Truth"
-        elif has_context and has_question and not has_answer:  # 1 1 0
+        elif has_context and has_question and not has_answer:  # 1 1 0 (3)
             return "Context + Question"
-        elif has_context and not has_question and has_answer:  # 1 0 1
+        elif has_context and not has_question and has_answer:  # 1 0 1 (5)
             return "Context + Ground Truth"
-        elif not has_context and has_question and has_answer:  # 0 1 1
+        elif not has_context and has_question and has_answer:  # 0 1 1 (6)
             return "QA Pair"
-        elif has_context and has_question and has_answer:  # 1 1 1
+        elif has_context and has_question and has_answer:  # 1 1 1 (7)
             return "Complete QA"
         else:
             return "Unknown"

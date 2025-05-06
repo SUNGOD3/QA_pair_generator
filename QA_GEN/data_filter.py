@@ -30,6 +30,12 @@ class DataFilter:
             
             # Add new methods here with their types
         }
+
+        self.filter_data_types = [
+            # Define the types of data that can be filtered first
+            0, 1, 2, 3, 4, 5
+            # Add more data types as needed
+        ]
     
     def filter_data(self, dataset: QADataset, registered_methods: Dict[str, bool], config: Dict[str, Any]) -> QADataset:
         """
@@ -45,6 +51,14 @@ class DataFilter:
             QADataset: The filtered dataset
         """
         print("Starting the filtering process...")
+
+        # Delete data that is still incomplete at this stage
+        delete_ids = []
+        for qa_pair in dataset:
+            if qa_pair.classify_id() in self.filter_data_types:
+                delete_ids.append(qa_pair.id)
+        dataset.delete(delete_ids)
+        print(f"Deleted {len(delete_ids)} incomplete QAPairs from the dataset")
 
         # Get all registered filter methods
         filter_methods = []
