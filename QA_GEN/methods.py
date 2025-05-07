@@ -20,7 +20,8 @@ class Method:
         name: str, 
         description: str, 
         applicable_stages: List[str], # List[str] = ["init_setup", "data_expansion", "build_knowledge_graph", "data_fusion", "data_filter", "data_augmentation"]
-        use_LLM: bool = False
+        use_LLM: bool = False,
+        complexity: str = None  # Optional field for describing complexity
     ):
         """
         Initialize a method with its metadata.
@@ -30,11 +31,13 @@ class Method:
             description (str): Detailed description of the method
             applicable_stages (List[str]): Stages where this method can be applied
             use_LLM (bool, optional): Whether the method uses LLM. Defaults to False.
+            complexity (str, optional): Description of method's time/space complexity. Optional field.
         """
         self.name = name
         self.description = description
         self.applicable_stages = applicable_stages
         self.use_LLM = use_LLM
+        self.complexity = complexity
 
     def __call__(self, func: Callable):
         """
@@ -47,13 +50,19 @@ class Method:
             Callable: The original function
         """
         # Store method information
-        Method._methods[self.name] = {
+        method_info = {
             'func': func,
             'name': self.name,
             'description': self.description,
             'applicable_stages': self.applicable_stages,
             'use_LLM': self.use_LLM
         }
+        
+        # Only add complexity if provided
+        if self.complexity is not None:
+            method_info['complexity'] = self.complexity
+            
+        Method._methods[self.name] = method_info
         return func
 
     @classmethod
@@ -82,11 +91,14 @@ class Method:
             if stage in method['applicable_stages']
         }
 
+
+
 @Method(
     name="context_to_qa", 
     description="Expand context-only QA pairs to full QA pairs",
     applicable_stages=["data_expansion"],
-    use_LLM=True
+    use_LLM=True,
+    complexity="O(n) where n is the number of context pairs; LLM calls may impact performance"
 )
 def context_to_qa(qa_pairs: List[QAPair], config) -> List[QAPair]:
     expanded_pairs = []
