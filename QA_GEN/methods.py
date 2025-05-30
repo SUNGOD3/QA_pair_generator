@@ -1,7 +1,11 @@
 #methods.py
 from typing import Any, Callable, Dict, List
-from .base import QAPair
-from .llms.oai_chat import OpenAIChat
+try:
+    from base import QAPair
+    from llms.oai_chat import OpenAIChat
+except ImportError:
+    from .base import QAPair
+    from .llms.oai_chat import OpenAIChat
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import re
@@ -21,6 +25,7 @@ class Method:
         description: str, 
         applicable_stages: List[str], # List[str] = ["init_setup", "data_expansion", "build_knowledge_graph", "data_fusion", "data_filter", "data_augmentation"]
         use_LLM: bool = False,
+        use_docker: bool = False,
         complexity: str = None  # Optional field for describing complexity
     ):
         """
@@ -37,6 +42,7 @@ class Method:
         self.description = description
         self.applicable_stages = applicable_stages
         self.use_LLM = use_LLM
+        self.use_docker = use_docker
         self.complexity = complexity
 
     def __call__(self, func: Callable):
@@ -55,9 +61,10 @@ class Method:
             'name': self.name,
             'description': self.description,
             'applicable_stages': self.applicable_stages,
-            'use_LLM': self.use_LLM
+            'use_LLM': self.use_LLM,
+            'use_docker': self.use_docker
         }
-        
+
         # Only add complexity if provided
         if self.complexity is not None:
             method_info['complexity'] = self.complexity
@@ -90,9 +97,7 @@ class Method:
             name: method for name, method in cls._methods.items()
             if stage in method['applicable_stages']
         }
-
-
-
+        
 @Method(
     name="context_to_qa", 
     description="Expand context-only QA pairs to full QA pairs",
@@ -726,6 +731,116 @@ def word_swap_augmentation(qa_pairs: List[QAPair], config) -> List[QAPair]:
                 context=qa_pair.context
             )
             
+            augmented_pairs.append(new_pair)
+    
+    return augmented_pairs
+
+@Method(
+    name="paraphrase_augmentation",
+    description="Generate paraphrased versions of questions and answers using simple word substitution",
+    applicable_stages=["data_augmentation"],
+    use_LLM=False,
+    complexity="O(n*m) where n is number of QA pairs and m is average text length"
+)
+def paraphrase_augmentation(qa_pairs: List[QAPair], config: Dict[str, Any]) -> List[QAPair]:
+    """
+    Generate paraphrased versions of QA pairs using simple word substitution.
+    
+    Args:
+        qa_pairs: List of QAPair objects
+        config: Configuration parameters
+        
+    Returns:
+        List of augmented QAPair objects
+    """
+    augmented_pairs = []
+    
+    # Simple word substitution dictionary
+    substitutions = {
+        'what': 'which',
+        'how': 'in what way',
+        'where': 'at what location',
+        'when': 'at what time',
+        'good': 'excellent',
+        'bad': 'poor',
+        'big': 'large',
+        'small': 'tiny'
+    }
+    
+    augmentation_rate = config.get('augmentation_rate', 0.5)  # 50% of pairs by default
+    num_to_augment = int(len(qa_pairs) * augmentation_rate)
+    
+    selected_pairs = random.sample(qa_pairs, min(num_to_augment, len(qa_pairs)))
+    
+    for qa_pair in selected_pairs:
+        if qa_pair.question:
+            # Paraphrase question
+            paraphrased_question = qa_pair.question.lower()
+            for original, replacement in substitutions.items():
+                paraphrased_question = paraphrased_question.replace(original, replacement)
+            
+            # Create new QA pair with paraphrased question
+            new_pair = QAPair(
+                context=qa_pair.context,
+                question=paraphrased_question.capitalize(),
+                answer=qa_pair.answer
+            )
+            augmented_pairs.append(new_pair)
+    
+    return augmented_pairs
+
+
+@Method(
+    name="paraphrase_augmentation",
+    description="Generate paraphrased versions of questions and answers using simple word substitution",
+    applicable_stages=["data_augmentation"],
+    use_LLM=False,
+    use_docker=True,
+    complexity="O(n*m) where n is number of QA pairs and m is average text length"
+)
+def paraphrase_augmentation(qa_pairs: List[QAPair], config: Dict[str, Any]) -> List[QAPair]:
+    """
+    Generate paraphrased versions of QA pairs using simple word substitution.
+    
+    Args:
+        qa_pairs: List of QAPair objects
+        config: Configuration parameters
+        
+    Returns:
+        List of augmented QAPair objects
+    """
+    augmented_pairs = []
+    
+    # Simple word substitution dictionary
+    substitutions = {
+        'what': 'which',
+        'how': 'in what way',
+        'where': 'at what location',
+        'when': 'at what time',
+        'good': 'excellent',
+        'bad': 'poor',
+        'big': 'large',
+        'small': 'tiny'
+    }
+    
+    augmentation_rate = config.get('augmentation_rate', 0.5)  # 50% of pairs by default
+    num_to_augment = int(len(qa_pairs) * augmentation_rate)
+    
+    selected_pairs = random.sample(qa_pairs, min(num_to_augment, len(qa_pairs)))
+    
+    for qa_pair in selected_pairs:
+        if qa_pair.question:
+            # Paraphrase question
+            paraphrased_question = qa_pair.question.lower()
+            for original, replacement in substitutions.items():
+                paraphrased_question = paraphrased_question.replace(original, replacement)
+            
+            # Create new QA pair with paraphrased question
+            new_pair = QAPair(
+                context=qa_pair.context,
+                question=paraphrased_question.capitalize(),
+                answer=qa_pair.answer
+            )
             augmented_pairs.append(new_pair)
     
     return augmented_pairs

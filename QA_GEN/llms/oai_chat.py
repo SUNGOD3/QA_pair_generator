@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI
 
-from QA_GEN.llms.base import LLM
+from .base import LLM
 from .utils import retry_with_exponential_backoff
 
 class OpenAIChat(LLM):

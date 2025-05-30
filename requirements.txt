@@ -6,3 +6,4 @@ groq
 together
 anthropic
 google-api-core
+docker
