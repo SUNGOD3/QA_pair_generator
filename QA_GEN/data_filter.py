@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Set
 from collections import deque
 from .base import QADataset, QAPair
 from .methods import Method
+from .docker_manager import DockerMethodManager
 
 class DataFilter:
     """
@@ -37,6 +38,7 @@ class DataFilter:
             0, 1, 2, 3, 4, 5
             # Add more data types as needed
         ]
+        self.docker_manager = DockerMethodManager()
     
     def filter_data(self, dataset: QADataset, registered_methods: Dict[str, bool], config: Dict[str, Any]) -> QADataset:
         """
@@ -93,7 +95,10 @@ class DataFilter:
                 subgraph_pairs = [dataset.get(id) for id in subgraph_ids]
                 
                 # Apply the refinement method
-                refined_pairs = method_func(subgraph_pairs, config)
+                if config.get('use_docker', True):
+                    refined_pairs = self.docker_manager.execute_method_in_docker(method_name, subgraph_pairs, config)
+                else:
+                    refined_pairs = method_func(subgraph_pairs, config)
                 
                 # Update the QA pairs in the dataset
                 for qa_pair in refined_pairs:
@@ -120,7 +125,10 @@ class DataFilter:
                 print(f"  Applying {method_name} to subgraph {i+1}")
                 
                 # Apply the deletion method
-                filtered_pairs = method_func(subgraph_pairs, config)
+                if config.get('use_docker', True):
+                    filtered_pairs = self.docker_manager.execute_method_in_docker(method_name, subgraph_pairs, config)
+                else:
+                    filtered_pairs = method_func(subgraph_pairs, config)
                 
                 # Determine which pairs were removed
                 removed_pairs = set(subgraph_pairs) - set(filtered_pairs)
@@ -189,3 +197,10 @@ class DataFilter:
             components.append(component)
             
         return components
+
+    def __del__(self):
+        """
+        Cleanup Docker resources when the object is destroyed
+        """
+        if hasattr(self, 'docker_manager'):
+            self.docker_manager.cleanup()

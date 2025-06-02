@@ -4,6 +4,7 @@ from collections import defaultdict
 import random
 from .base import QAPair, QADataset
 from .methods import Method
+from .docker_manager import DockerMethodManager
 
 class DataFusioner:
     """
@@ -30,6 +31,8 @@ class DataFusioner:
         self._register_default_retrievers()
         # Auto-register method types
         self._register_default_method_types()
+
+        self.docker_manager = DockerMethodManager()
 
     def _register_default_retrievers(self):
         """Register the built-in retrievers automatically"""
@@ -169,7 +172,13 @@ class DataFusioner:
                 self.processed_combinations.add(combination_key)
                 
                 # Apply the fusion method
-                fused_pairs = method_info['func'](fusion_input, config)
+                if method_info['use_docker'] == True:
+                    # Execute method in Docker environment
+                    fused_pairs = self.docker_manager.execute_method_in_docker(
+                        method_name, fusion_input, config
+                    )
+                else:
+                    fused_pairs = method_info['func'](fusion_input, config)
                 
                 # Add edge information and add to dataset
                 for fused_pair in fused_pairs:

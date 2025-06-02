@@ -7,3 +7,6 @@ together
 anthropic
 google-api-core
 docker
+matplotlib
+networkx
+scikit-learn

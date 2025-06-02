@@ -3,6 +3,7 @@ import copy
 from typing import List, Dict, Any
 from .base import QAPair, QADataset
 from .methods import Method
+from .docker_manager import DockerMethodManager
 
 class DataExpander:
     """
@@ -28,6 +29,7 @@ class DataExpander:
             "generate_summary_qa": [(1, 7)],
             "generate_fill_in_blank": [(1, 7)],
         }
+        self.docker_manager = DockerMethodManager()
 
     def expand_data(self, dataset: QADataset, config) -> QADataset:
         """
@@ -60,7 +62,13 @@ class DataExpander:
                         pair_list = self.data_expansion_methods[method_name]
                         if edge_pair in pair_list:
                             print("Using Method name:", method_name)
-                            expanded_entry = method_info['func']([qa_pair], config)
+                            if method_info['use_docker'] == True:
+                                # Execute method in Docker environment
+                                expanded_entry = self.docker_manager.execute_method_in_docker(
+                                    method_name, [qa_pair], config
+                                )
+                            else:
+                                expanded_entry = method_info['func']([qa_pair], config)
                             for entry in expanded_entry:
                                 entry.add_edge(qa_pair.id, "expanded")
                                 expanded_dataset.add(entry)
@@ -90,3 +98,9 @@ class DataExpander:
         new_pair.add_edge(qa_pair.id, "reduced")
         return new_pair
     
+    def __del__(self):
+        """
+        Cleanup Docker resources when the object is destroyed
+        """
+        if hasattr(self, 'docker_manager'):
+            self.docker_manager.cleanup()

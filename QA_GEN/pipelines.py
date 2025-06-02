@@ -77,6 +77,15 @@ class Pipeline:
                 else:
                     self.methods_registered[name] = False
                     print(f"  Method '{name}' not applicable.")
+        # If user wants to manually configure methods
+        method = params.get('methods_to_run', [])
+        if method:
+            for method_name in method:
+                if method_name in self.methods_registered:
+                    self.methods_registered[method_name] = True
+                    print(f"  Method '{method_name}' added to dataset.")
+                else:
+                    print(f"  Method '{method_name}' not found or not applicable.")
         return dataset
 
     def data_expansion(self, dataset: QADataset, config: Dict[str, Any]) -> QADataset:

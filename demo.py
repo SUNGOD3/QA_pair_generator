@@ -11,15 +11,14 @@ def main():
     for qa in dataset:
         print(qa)
     config = {
-        'auto_config': True
+        'auto_config': False,
+        'methods_to_run': ["paraphrase_augmentation", "key_sentences_question"],
     }
 
     # Run pipeline
     processed_dataset = pipeline.run(dataset, config)
     for qa in processed_dataset:
         print(qa)
-
-    
 
 if __name__ == '__main__':
     main()
