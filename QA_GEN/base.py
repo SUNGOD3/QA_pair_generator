@@ -1,5 +1,5 @@
 #base.py
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
@@ -11,12 +11,14 @@ nltk.download("stopwords")
 
 class QAPair:
 
-    def __init__(self, context: str = None, question: str = None, answer: str = None):
+    def __init__(self, context: str = None, question: str = None, answer: str = None, 
+                 metadata: Dict[str, Any] = None):
         self.id = None
         self.set_answer(answer)
         self.set_context(context)
         self.set_question(question)
-        self.edges = []  # Will now store (method_name, target_id) tuples
+        self.edges = []
+        self.metadata = metadata or {}
 
     def extract_keywords(self, text):
         '''
@@ -28,8 +30,6 @@ class QAPair:
         words = [w.lower() for w in words if w.isalnum()] # Remove punctuation
         stop_words = set(stopwords.words("english"))
         filtered_words = [w for w in words if w not in stop_words]
-
-        # Count the frequency of each word
         keyword_counts = Counter(filtered_words)
         return [word for word, _ in keyword_counts.most_common(5)]
     
@@ -70,6 +70,30 @@ class QAPair:
         if method_name is None:
             return self.edges
         return [target_id for method, target_id in self.edges if method == method_name]
+
+    def set_metadata(self, key: str, value: Any, method_name: str = None):
+        """
+        Set metadata for this QAPair.
+        
+        Args:
+            key: The metadata key
+            value: The metadata value
+            method_name: Optional method name to namespace the metadata
+        """
+        if method_name:
+            if method_name not in self.metadata:
+                self.metadata[method_name] = {}
+            self.metadata[method_name][key] = value
+        else:
+            self.metadata[key] = value
+
+    def get_metadata(self, key: str, method_name: str = None, default=None):
+        """
+        Get metadata for this QAPair.
+        """
+        if method_name:
+            return self.metadata.get(method_name, {}).get(key, default)
+        return self.metadata.get(key, default)
 
     def classify(self):
         '''
@@ -114,6 +138,36 @@ class QAPair:
                 f"context_keywords={self.context_keywords}, "
                 f"question_keywords={self.question_keywords}, "
                 f"answer_keywords={self.answer_keywords})")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert QAPair to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'context': self.context,
+            'question': self.question,
+            'answer': self.answer,
+            'edges': self.edges,
+            'metadata': self.metadata,
+            'context_keywords': getattr(self, 'context_keywords', []),
+            'question_keywords': getattr(self, 'question_keywords', []),
+            'answer_keywords': getattr(self, 'answer_keywords', [])
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'QAPair':
+        """Create QAPair from dictionary."""
+        qa_pair = cls(
+            context=data.get('context'),
+            question=data.get('question'),
+            answer=data.get('answer'),
+            metadata=data.get('metadata', {})
+        )
+        qa_pair.id = data.get('id')
+        qa_pair.edges = data.get('edges', [])
+        qa_pair.context_keywords = data.get('context_keywords', [])
+        qa_pair.question_keywords = data.get('question_keywords', [])
+        qa_pair.answer_keywords = data.get('answer_keywords', [])
+        return qa_pair
 
 
 class QADataset:
