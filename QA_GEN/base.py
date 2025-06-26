@@ -5,6 +5,10 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from collections import Counter
 from copy import deepcopy
+import json
+import os
+import pickle
+from pathlib import Path
 
 nltk.download('punkt_tab')
 nltk.download("stopwords")
@@ -171,13 +175,93 @@ class QAPair:
 
 
 class QADataset:
-    def __init__(self, name: str = None, description: str = None, qa_pairs: list[QAPair] = None):
-        self.name = name
+    def __init__(self, name: str = None, description: str = None, qa_pairs: list[QAPair] = None, 
+                 use_disk: bool = True, disk_path: str = None):
+        self.name = name or "default_dataset"
         self.description = description
+        self.use_disk = use_disk
         self.data: dict[int, QAPair] = {}
+        
+        # Setup disk storage if enabled
+        if self.use_disk:
+            self.disk_path = disk_path or f"./qa_dataset_storage/{self.name}"
+            self._setup_disk_storage()
+        else:
+            self.disk_path = None
 
         if qa_pairs:
             self._initialize_dataset(qa_pairs)
+
+    def _setup_disk_storage(self):
+        """Setup disk storage directory and metadata."""
+        self.disk_path = Path(self.disk_path)
+        self.disk_path.mkdir(parents=True, exist_ok=True)
+        
+        # Create metadata file
+        self.metadata_file = self.disk_path / "metadata.json"
+        self.data_file = self.disk_path / "qa_data.pkl"
+        
+        # Initialize metadata if it doesn't exist
+        if not self.metadata_file.exists():
+            metadata = {
+                "name": self.name,
+                "description": self.description,
+                "size": 0,
+                "last_updated": None,
+                "current_stage": "init"
+            }
+            with open(self.metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+
+    def _save_to_disk(self, stage: str = None):
+        """Save current dataset to disk."""
+        if not self.use_disk:
+            return
+            
+        # Save data
+        with open(self.data_file, 'wb') as f:
+            pickle.dump(self.data, f)
+        
+        # Update metadata
+        metadata = {
+            "name": self.name,
+            "description": self.description,
+            "size": len(self.data),
+            "last_updated": __import__('datetime').datetime.now().isoformat(),
+            "current_stage": stage or "unknown"
+        }
+        with open(self.metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        print(f"Dataset saved to disk at stage: {stage}, size: {len(self.data)}")
+
+    def _load_from_disk(self):
+        """Load dataset from disk."""
+        if not self.use_disk or not self.data_file.exists():
+            return
+        
+        # Load data
+        with open(self.data_file, 'rb') as f:
+            self.data = pickle.load(f)
+        
+        # Load metadata
+        if self.metadata_file.exists():
+            with open(self.metadata_file, 'r') as f:
+                metadata = json.load(f)
+                self.name = metadata.get("name", self.name)
+                self.description = metadata.get("description", self.description)
+        
+        print(f"Dataset loaded from disk, size: {len(self.data)}")
+
+    def save_stage_result(self, stage: str):
+        """Save the current state after a pipeline stage."""
+        if self.use_disk:
+            self._save_to_disk(stage)
+
+    def load_stage_input(self, stage: str):
+        """Load the dataset state before a pipeline stage."""
+        if self.use_disk:
+            self._load_from_disk()
 
     def _initialize_dataset(self, qa_pairs: list[QAPair]):
         '''
@@ -207,6 +291,10 @@ class QADataset:
             qa.edges = new_edges
 
         self.data = new_data
+        
+        # Save to disk if enabled
+        if self.use_disk:
+            self._save_to_disk("initialized")
 
     def get(self, id):
         if id in self.data:
@@ -322,11 +410,14 @@ class QADataset:
         return len(self.data)
 
     def __repr__(self):
-        return f"QADataset(size={len(self.data)})"
+        disk_info = f", disk_enabled={self.use_disk}" if self.use_disk else ""
+        return f"QADataset(size={len(self.data)}{disk_info})"
     
     def copy(self):
         return QADataset(
             name=self.name,
             description=self.description,
-            qa_pairs=list(self.data.values())
+            qa_pairs=list(self.data.values()),
+            use_disk=self.use_disk,
+            disk_path=self.disk_path
         )

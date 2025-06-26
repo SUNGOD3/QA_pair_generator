@@ -15,6 +15,7 @@ class Pipeline:
     """
     Flexible data processing pipeline for QA datasets.
     Discovers and manages methods from methods.py dynamically.
+    Supports disk-based storage for large-scale dataset processing.
     """
     def __init__(self):
         """
@@ -30,10 +31,10 @@ class Pipeline:
         ]
         self.methods_registered = {method: False for method in Method.get_methods().keys()}
 
-
     def run(self, dataset: QADataset, config: Dict[str, Any]) -> QADataset:
         """
         Execute the pipeline stages with discovered methods.
+        Supports disk-based processing for large datasets.
         
         Args:
             dataset (QADataset): Initial dataset to process
@@ -44,20 +45,45 @@ class Pipeline:
         """
         # Initialize methods
         print(f"Running init_setup stage...")
-        self.init_setup(dataset, config)
-
+        dataset = self.init_setup(dataset, config)
+        
+        # Process each stage with disk storage support
         for stage in self.stages:
             print(f"Running stage: {stage}")
+            
+            # Load previous stage results if using disk storage
+            if dataset.use_disk:
+                dataset.load_stage_input(stage)
+                print(f"Loaded dataset from disk for stage {stage}, size: {len(dataset)}")
+            
+            # Execute the stage
             dataset = getattr(self, stage)(dataset, config)
-            print(f"Size of dataset after {stage}: {len(dataset)}")
+            
+            # Save stage results if using disk storage
+            if dataset.use_disk:
+                dataset.save_stage_result(stage)
+                print(f"Saved dataset to disk after stage {stage}, size: {len(dataset)}")
+            else:
+                print(f"Size of dataset after {stage}: {len(dataset)}")
         
         print("Processing completed.")
         return dataset
 
-
     def init_setup(self, dataset: QADataset, params: dict):
+        """
+        Initialize the dataset and setup methods.
+        Handles disk storage initialization if enabled.
+        """
         print("Initializing dataset...")
+        
+        # Initialize dataset structure
         dataset._initialize_dataset(list(dataset.data.values()))
+        
+        # Save initial state if using disk storage
+        if dataset.use_disk:
+            dataset.save_stage_result("init_setup")
+        
+        # Auto-configure methods or use manual configuration
         if params.get('auto_config', True):
             dataset_description = dataset.description
             for name, method in Method.get_methods().items():
@@ -77,7 +103,8 @@ class Pipeline:
                 else:
                     self.methods_registered[name] = False
                     print(f"  Method '{name}' not applicable.")
-        # If user wants to manually configure methods
+        
+        # Manual method configuration
         method = params.get('methods_to_run', [])
         if method:
             for method_name in method:
@@ -86,6 +113,7 @@ class Pipeline:
                     print(f"  Method '{method_name}' added to dataset.")
                 else:
                     print(f"  Method '{method_name}' not found or not applicable.")
+        
         return dataset
 
     def data_expansion(self, dataset: QADataset, config: Dict[str, Any]) -> QADataset:
@@ -99,36 +127,48 @@ class Pipeline:
         Returns:
             QADataset: Expanded dataset
         """
-        # Add methods to the configuration
-        expansin_methods = []
+        print("Expanding data...")
+        
+        # Get expansion methods from registered Methods
+        expansion_methods = []
         for method_name, method_info in Method.get_methods().items():
             if 'data_expansion' in method_info['applicable_stages'] and self.methods_registered.get(method_name, True):
-                expansin_methods.append(method_name)
+                expansion_methods.append(method_name)
         
         # Expand data using DataExpander
         data_expander = DataExpander()
-        expanded_pairs = data_expander.expand_data(dataset, expansin_methods)
+        expanded_pairs = data_expander.expand_data(dataset, expansion_methods)
         
         return expanded_pairs
 
     def build_knowledge_graph(self, dataset: QADataset, params: dict):
+        """
+        Build knowledge graph stage with disk storage support.
+        """
         print("Building knowledge graph...")
+        
         edge_builder = EdgeBuilder(dataset)
 
         # Build edges automatically
         edge_builder.build_cosine_similarity_edges()
         edge_builder.build_keyword_overlap_edges()
 
-        # Visualize all graphs separately
-        edge_builder.visualize_all_graphs()
+        # Visualize graphs (only if dataset is not too large or if explicitly requested)
+        if len(dataset) < params.get('max_visualization_size', 1000):
+            edge_builder.visualize_all_graphs()
+            edge_builder.visualize_combined_graph()
+        else:
+            print("Dataset too large for visualization, skipping graph visualization")
 
-        # Visualize a combined graph
-        edge_builder.visualize_combined_graph()
         stats = edge_builder.get_graph_statistics()
         print("Graph Statistics:", stats)
+        
         return dataset
 
     def data_fusion(self, dataset: QADataset, params: dict):
+        """
+        Data fusion stage with disk storage support.
+        """
         print("Running data_fusion...")
         
         # Get fusion methods from registered Methods
@@ -147,7 +187,7 @@ class Pipeline:
 
     def data_filter(self, dataset: QADataset, params: dict):
         """
-        Filter data stage in the pipeline. Applies registered filter methods to the dataset.
+        Filter data stage in the pipeline with disk storage support.
         
         Args:
             dataset (QADataset): Input dataset
@@ -158,13 +198,19 @@ class Pipeline:
         """
         print("Filtering data...")
         
-        # For debugging purposes, print the original dataset
+        # For debugging purposes (only print first few items for large datasets)
         print("Original dataset size:", len(dataset))
-        for qa in dataset:
-            print(qa)
+        if len(dataset) <= 10:
+            for qa in dataset:
+                print(qa)
+        else:
+            print("Dataset too large to print all items, showing first 3:")
+            for i, qa in enumerate(dataset):
+                if i >= 3:
+                    break
+                print(qa)
         
         # Initialize and run the DataFilter
-        
         data_filter = DataFilter()
         filtered_dataset = data_filter.filter_data(dataset, self.methods_registered, params)
         
@@ -172,7 +218,7 @@ class Pipeline:
 
     def data_augmentation(self, dataset: QADataset, params: dict):
         """
-        Data augmentation stage in the pipeline. Applies registered augmentation methods to the dataset.
+        Data augmentation stage in the pipeline with disk storage support.
         
         Args:
             dataset (QADataset): Input dataset
@@ -192,3 +238,59 @@ class Pipeline:
         print(f"Dataset size after augmentation: {len(augmented_dataset)}")
         
         return augmented_dataset
+
+    def cleanup_disk_storage(self, dataset: QADataset):
+        """
+        Clean up disk storage files for the dataset.
+        
+        Args:
+            dataset (QADataset): Dataset whose disk storage should be cleaned up
+        """
+        if dataset.use_disk and dataset.disk_path:
+            import shutil
+            try:
+                shutil.rmtree(dataset.disk_path)
+                print(f"Cleaned up disk storage at: {dataset.disk_path}")
+            except Exception as e:
+                print(f"Warning: Could not clean up disk storage: {e}")
+
+    def get_disk_usage(self, dataset: QADataset) -> dict:
+        """
+        Get disk usage information for the dataset.
+        
+        Args:
+            dataset (QADataset): Dataset to check disk usage for
+            
+        Returns:
+            dict: Dictionary containing disk usage information
+        """
+        if not dataset.use_disk or not dataset.disk_path:
+            return {"disk_enabled": False}
+        
+        import os
+        from pathlib import Path
+        
+        disk_path = Path(dataset.disk_path)
+        if not disk_path.exists():
+            return {"disk_enabled": True, "path": str(disk_path), "exists": False}
+        
+        total_size = 0
+        file_info = {}
+        
+        for file_path in disk_path.rglob("*"):
+            if file_path.is_file():
+                size = file_path.stat().st_size
+                total_size += size
+                file_info[file_path.name] = {
+                    "size_bytes": size,
+                    "size_mb": round(size / (1024 * 1024), 2)
+                }
+        
+        return {
+            "disk_enabled": True,
+            "path": str(disk_path),
+            "exists": True,
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "files": file_info
+        }
