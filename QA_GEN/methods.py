@@ -158,6 +158,93 @@ def key_sentences_question(qa_pairs, config):
     return rt_pairs
 
 @Method(
+    name="paq_answer_extraction", 
+    description="Extract k candidate answer spans from context using PAQ-style answer extraction. Creates multiple QAPairs with the same context but different extracted answers, leaving questions empty for later generation.",
+    applicable_stages=["data_expansion"],
+    use_LLM=True,
+    complexity="O(n) where n is the number of context pairs; LLM calls may impact performance"
+)
+def paq_answer_extraction(qa_pairs: List[QAPair], config, k: int = 3) -> List[QAPair]:
+    """
+    Extract k candidate answer spans from context using LLM-based extraction.
+    
+    Args:
+        qa_pairs: List of QAPair objects (should contain context-only pairs)
+        config: Configuration object
+        k: Number of candidate answers to extract per context (default: 3)
+    
+    Returns:
+        List of new QAPair objects with extracted answers
+    """
+    extracted_pairs = []
+    
+    for context_pair in qa_pairs:
+        if context_pair.classify_id() == 1:  # Context-only type (Document)
+            llm = OllamaChat()
+            
+            # Prompt for extracting candidate answer spans
+            prompt = f"""
+You are an AI specialized in extracting potential answer spans from given text contexts.
+Your task is to identify {k} different text spans that could serve as good answers to potential questions.
+
+Instructions:
+1. Extract exactly {k} different spans from the context
+2. Each span should be a meaningful phrase, sentence, or key information that could answer a question
+3. Spans can be single words, phrases, or complete sentences
+4. Choose diverse spans that cover different aspects of the context
+5. Prefer factual information, names, dates, numbers, or key concepts
+6. Output each span on a separate line, numbered from 1 to {k}
+
+Format your response as:
+1. <first answer span>
+2. <second answer span>
+3. <third answer span>
+...
+
+Context: {context_pair.context[:2000]}  # Limit context length to avoid token limits
+"""
+            
+            try:
+                response_text, response_info = llm(prompt=prompt)
+                
+                # Parse the numbered list response
+                lines = response_text.strip().split('\n')
+                extracted_answers = []
+                
+                for line in lines:
+                    line = line.strip()
+                    if line and (line[0].isdigit() or line.startswith('1.') or line.startswith('2.') or line.startswith('3.')):
+                        # Remove the number prefix (e.g., "1. ", "2. ", etc.)
+                        answer = re.sub(r'^\d+\.\s*', '', line).strip()
+                        if answer:
+                            extracted_answers.append(answer)
+                
+                # Create new QAPairs for each extracted answer
+                for i, answer in enumerate(extracted_answers[:k]):  # Limit to k answers
+                    new_pair = QAPair(
+                        context=context_pair.context,
+                        question=None,  # Question remains empty
+                        answer=answer
+                    )
+                    
+                    # Add metadata to track the extraction
+                    new_pair.set_metadata('extraction_method', 'paq_answer_extraction')
+                    new_pair.set_metadata('source_context_id', context_pair.id)
+                    new_pair.set_metadata('answer_rank', i + 1)
+                    new_pair.set_metadata('total_extracted', len(extracted_answers))
+                    
+                    extracted_pairs.append(new_pair)
+                
+                print(f"Extracted {len(extracted_answers)} answers from context ID {context_pair.id}")
+                
+            except Exception as e:
+                print(f"Error processing context pair {context_pair.id}: {str(e)}")
+                continue
+    
+    print(f"Total extracted QAPairs: {len(extracted_pairs)}")
+    return extracted_pairs
+
+@Method(
     name="generate_summary_question",
     description="Generate summary questions, where the question is about the summary of the content",
     applicable_stages=["data_expansion"],

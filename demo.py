@@ -27,7 +27,7 @@ def main():
     # Same config as original
     config = {
         'auto_config': False,
-        'methods_to_run': ["paraphrase_augmentation", "key_sentences_question", "context_to_qa"],
+        'methods_to_run': ["paraphrase_augmentation", "key_sentences_question", "context_to_qa", "paq_answer_extraction"],
     }
 
     # Run pipeline - same as original

@@ -28,6 +28,7 @@ class DataExpander:
             "generate_summary_question": [(1, 3)],
             "generate_summary_qa": [(1, 7)],
             "generate_fill_in_blank": [(1, 7)],
+            "paq_answer_extraction": [(1, 5)],
         }
         self.docker_manager = DockerMethodManager()
 
