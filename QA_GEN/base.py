@@ -304,7 +304,9 @@ class QADataset:
     def add(self, qa_pair: QAPair):
         new_id = len(self.data) + 1
         if new_id in self.data:
-            raise ValueError("ID already exists in the dataset.")
+            self.edit(qa_pair.id, qa_pair)
+            return
+            #raise ValueError("ID already exists in the dataset.")
         new_qa_pair = deepcopy(qa_pair)  
         new_qa_pair.id = new_id
         self.data[new_id] = new_qa_pair
@@ -400,7 +402,7 @@ class QADataset:
                 self.data[id].set_answer(answer)
         else:
             raise ValueError("No valid fields provided to edit.")
-        
+        print(f"Edited QAPair with ID {id}: {self.data[id]}")
         return True
 
     def __iter__(self):

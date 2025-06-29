@@ -3,9 +3,11 @@ from typing import Any, Callable, Dict, List
 try:
     from base import QAPair
     from llms.oai_chat import OpenAIChat
+    from llms.ollama_chat import OllamaChat
 except ImportError:
     from .base import QAPair
     from .llms.oai_chat import OpenAIChat
+    from .llms.ollama_chat import OllamaChat
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import re
@@ -109,7 +111,7 @@ def context_to_qa(qa_pairs: List[QAPair], config) -> List[QAPair]:
     expanded_pairs = []
     for context_pair in qa_pairs:
         if context_pair.classify_id() == 1:  # Context-only type
-            llm = OpenAIChat()
+            llm = OllamaChat()
             # Generate full QA pairs using LLM
             prompt = f"""
 You are an AI specialized in generating QA pairs from a given context.  

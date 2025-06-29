@@ -45,14 +45,12 @@ class DataExpander:
         expanded_dataset = dataset.copy()
         for qa_pair in dataset:
             current_type = qa_pair.classify_id()
+            
             for target_type in range(1, 8):
-                if current_type == target_type:
-                    continue
                 # Subset type: reduce
-                if (current_type & target_type) == target_type:
+                if (current_type & target_type) == target_type and (current_type != target_type):
                     reduced_pair = DataExpander._reduce_to_type(qa_pair, target_type)
                     expanded_dataset.add(reduced_pair)
-                    continue
                 
                 edge_pair = (current_type, target_type)
                 # Complex expansion
@@ -61,18 +59,17 @@ class DataExpander:
                         method_info = Method.get_methods()[method_name]
                         pair_list = self.data_expansion_methods[method_name]
                         if edge_pair in pair_list:
-                            print("Using Method name:", method_name)
+                            qa_pair_copy = copy.deepcopy(qa_pair)
                             if method_info['use_docker'] == True:
                                 # Execute method in Docker environment
                                 expanded_entry = self.docker_manager.execute_method_in_docker(
-                                    method_name, [qa_pair], config
+                                    method_name, [qa_pair_copy], config
                                 )
                             else:
-                                expanded_entry = method_info['func']([qa_pair], config)
+                                expanded_entry = method_info['func']([qa_pair_copy], config)
                             for entry in expanded_entry:
-                                entry.add_edge(qa_pair.id, "expanded")
+                                entry.add_edge(qa_pair_copy.id, "expanded")
                                 expanded_dataset.add(entry)
-        
         return expanded_dataset
 
     def _reduce_to_type(qa_pair: QAPair, target_type: int) -> QAPair:

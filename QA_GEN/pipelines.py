@@ -5,6 +5,7 @@ from .methods import Method
 from .docker_manager import DockerMethodManager
 from .data_expander import DataExpander
 from .llms.oai_chat import OpenAIChat
+from .llms.ollama_chat import OllamaChat
 from .edge_builder import EdgeBuilder
 from .data_fusioner import DataFusioner
 from .data_filter import DataFilter
@@ -87,7 +88,7 @@ class Pipeline:
         if params.get('auto_config', True):
             dataset_description = dataset.description
             for name, method in Method.get_methods().items():
-                # llm = OpenAIChat()
+                llm = OllamaChat()
                 # LLM: Decide whether to use this method
                 method_description = method['description']
                 prompt = f"Given the dataset description '{dataset_description}' and method description '{method_description}', should we use this method? (yes/no)"
