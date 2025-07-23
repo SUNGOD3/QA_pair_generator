@@ -9,7 +9,7 @@ def main():
     with optional disk storage support
     """
     # Create pipeline
-    pipeline = Pipeline()
+    pipeline = Pipeline(stages=["data_expansion"])
     
     # Create dataset - set use_disk=True for large datasets, False for small ones
     dataset = QADataset(
@@ -20,12 +20,7 @@ def main():
     with open('data/psgs_w100.first_1000.tsv', 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
         for row in reader:
-            # 這裡假設 QADataset 支援 context 參數
             dataset.add(QAPair(context=row['text']))
-    
-    # Print initial dataset
-    for qa in dataset:
-        print(qa)
     
     # Same config as original
     config = {

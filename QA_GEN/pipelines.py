@@ -10,7 +10,6 @@ from .edge_builder import EdgeBuilder
 from .data_fusioner import DataFusioner
 from .data_filter import DataFilter
 from .data_augmenter import DataAugmenter
-import logging
 
 class Pipeline:
     """
@@ -18,18 +17,42 @@ class Pipeline:
     Discovers and manages methods from methods.py dynamically.
     Supports disk-based storage for large-scale dataset processing.
     """
-    def __init__(self):
+    def __init__(self, stages: Optional[List[str]] = None):
         """
-        Automatically discover and register methods from methods module
+        Initialize Pipeline with customizable stages.
+        
+        Args:
+            stages (Optional[List[str]]): List of stages to execute in the pipeline.
+                                        Must be subset of available stages:
+                                        ["data_expansion", "build_knowledge_graph", 
+                                        "data_fusion", "data_filter", "data_augmentation"]
+                                        If None, uses all default stages.
+        
+        Raises:
+            ValueError: If any stage in the provided list is not available.
         """
-        # Predefined stages
-        self.stages = [
+        # Define available stages
+        self.available_stages = [
             "data_expansion", 
             "build_knowledge_graph", 
             "data_fusion", 
             "data_filter",
             "data_augmentation"
         ]
+        
+        # Set stages - use provided stages or default to all available stages
+        if stages is None:
+            self.stages = self.available_stages.copy()
+        else:
+            # Validate that all provided stages are available
+            invalid_stages = [stage for stage in stages if stage not in self.available_stages]
+            if invalid_stages:
+                raise ValueError(f"Invalid stages provided: {invalid_stages}. "
+                            f"Available stages are: {self.available_stages}")
+            
+            self.stages = stages.copy()
+        
+        # Initialize methods registration
         self.methods_registered = {method: False for method in Method.get_methods().keys()}
 
     def run(self, dataset: QADataset, config: Dict[str, Any]) -> QADataset:
@@ -51,7 +74,7 @@ class Pipeline:
         # Process each stage with disk storage support
         for stage in self.stages:
             print(f"Running stage: {stage}")
-            
+
             # Load previous stage results if using disk storage
             if dataset.use_disk:
                 dataset.load_stage_input(stage)

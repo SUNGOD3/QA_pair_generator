@@ -8,8 +8,11 @@ from .utils import retry_with_exponential_backoff
 class OllamaChat(LLM):
     TOP_LOGPROBS = 1
 
-    def __init__(self, model_name='llama3.2') -> None:
-        self.base_url = os.getenv('OLLAMA_API_URL', 'http://localhost:11434')
+    def __init__(self, model_name='llama3.2', base_url = None) -> None:
+        if base_url is None:
+            self.base_url = os.getenv('OLLAMA_API_URL', 'http://localhost:11434')
+        else:
+            self.base_url = base_url
         self.model_name = model_name
         # Ensure the model is available
         self._check_model_availability()
@@ -50,7 +53,7 @@ class OllamaChat(LLM):
     def __call__(self, prompt: str, max_tokens: int = 1024, temperature=0.0, **kwargs) -> tuple[str, dict]:
         payload = {
             "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "prompt": prompt,  # 使用 prompt 而不是 messages
             "stream": False,
             "options": {
                 "temperature": float(temperature),
@@ -64,14 +67,14 @@ class OllamaChat(LLM):
 
         try:
             response = requests.post(
-                f"{self.base_url}/api/chat",
+                f"{self.base_url}/api/generate",  # 使用 generate 而不是 chat
                 json=payload,
                 headers={'Content-Type': 'application/json'}
             )
             response.raise_for_status()
             
             result = response.json()
-            res_text = result["message"]["content"]
+            res_text = result["response"]  # generate API 回傳的是 "response" 欄位
             
             # Estimate token counts since Ollama doesn't provide exact counts
             num_input_tokens = self._count_tokens(prompt)
@@ -98,7 +101,6 @@ class OllamaChat(LLM):
                 "logprobs": mock_logprobs
             }
             
-            print(f"OllamaChat: {res_text}")
             return res_text, res_info
             
         except requests.exceptions.RequestException as e:

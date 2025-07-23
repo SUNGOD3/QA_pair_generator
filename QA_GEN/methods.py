@@ -164,7 +164,7 @@ def key_sentences_question(qa_pairs, config):
     use_LLM=True,
     complexity="O(n) where n is the number of context pairs; LLM calls may impact performance"
 )
-def paq_answer_extraction(qa_pairs: List[QAPair], config, k: int = 3) -> List[QAPair]:
+def paq_answer_extraction(qa_pairs: List[QAPair], config, k: int = 8, llm = None) -> List[QAPair]:
     """
     Extract k candidate answer spans from context using LLM-based extraction.
     
@@ -180,28 +180,28 @@ def paq_answer_extraction(qa_pairs: List[QAPair], config, k: int = 3) -> List[QA
     
     for context_pair in qa_pairs:
         if context_pair.classify_id() == 1:  # Context-only type (Document)
-            llm = OllamaChat()
+            if llm is None:
+                llm = OllamaChat()
             
-            # Prompt for extracting candidate answer spans
+            # Prompt for extracting SHORT candidate answer spans
             prompt = f"""
-You are an AI specialized in extracting potential answer spans from given text contexts.
-Your task is to identify {k} different text spans that could serve as good answers to potential questions.
+You are an AI specialized in extracting SHORT answer spans from given contexts.
+Your task is to identify {k} different SHORT text spans that could serve as concise answers to potential questions.
 
-Instructions:
-1. Extract exactly {k} different spans from the context
-2. Each span should be a meaningful phrase, sentence, or key information that could answer a question
-3. Spans can be single words, phrases, or complete sentences
-4. Choose diverse spans that cover different aspects of the context
-5. Prefer factual information, names, dates, numbers, or key concepts
-6. Output each span on a separate line, numbered from 1 to {k}
+CRITICAL REQUIREMENTS:
+1. Extract exactly {k} different SHORT spans from the context
+2. Focus on: proper nouns, dates, numbers, key terms, specific facts
+3. Avoid complete sentences or long phrases
+4. Choose the most informative and precise spans
+5. Examples of good spans: "2023", "John Smith", "machine learning", "25%", "New York"
 
-Format your response as:
-1. <first answer span>
-2. <second answer span>
-3. <third answer span>
+Format your response as numbered list:
+1. <span 1>
+2. <span 2>
+3. <span 3>
 ...
 
-Context: {context_pair.context[:2000]}  # Limit context length to avoid token limits
+Context: {context_pair.context[:2000]}
 """
             
             try:
@@ -216,8 +216,13 @@ Context: {context_pair.context[:2000]}  # Limit context length to avoid token li
                     if line and (line[0].isdigit() or line.startswith('1.') or line.startswith('2.') or line.startswith('3.')):
                         # Remove the number prefix (e.g., "1. ", "2. ", etc.)
                         answer = re.sub(r'^\d+\.\s*', '', line).strip()
-                        if answer:
-                            extracted_answers.append(answer)
+                        
+                        # Filter for short spans (enforce length constraint)
+                        if answer and len(answer.split()) <= 8:  # Max 8 words
+                            # Remove quotes if present
+                            answer = answer.strip('"\'')
+                            if answer:
+                                extracted_answers.append(answer)
                 
                 # Create new QAPairs for each extracted answer
                 for i, answer in enumerate(extracted_answers[:k]):  # Limit to k answers
@@ -227,21 +232,11 @@ Context: {context_pair.context[:2000]}  # Limit context length to avoid token li
                         answer=answer
                     )
                     
-                    # Add metadata to track the extraction
-                    new_pair.set_metadata('extraction_method', 'paq_answer_extraction')
-                    new_pair.set_metadata('source_context_id', context_pair.id)
-                    new_pair.set_metadata('answer_rank', i + 1)
-                    new_pair.set_metadata('total_extracted', len(extracted_answers))
-                    
                     extracted_pairs.append(new_pair)
                 
-                print(f"Extracted {len(extracted_answers)} answers from context ID {context_pair.id}")
-                
             except Exception as e:
-                print(f"Error processing context pair {context_pair.id}: {str(e)}")
                 continue
-    
-    print(f"Total extracted QAPairs: {len(extracted_pairs)}")
+
     return extracted_pairs
 
 @Method(
@@ -251,7 +246,7 @@ Context: {context_pair.context[:2000]}  # Limit context length to avoid token li
     use_LLM=True,
     complexity="O(n) where n is the number of context+answer pairs; LLM calls may impact performance"
 )
-def paq_question_generation(qa_pairs: List[QAPair], config) -> List[QAPair]:
+def paq_question_generation(qa_pairs: List[QAPair], config, llm = None) -> List[QAPair]:
     """
     Generate questions for QAPairs that have context and answer but no question.
     
@@ -266,7 +261,8 @@ def paq_question_generation(qa_pairs: List[QAPair], config) -> List[QAPair]:
     
     for qa_pair in qa_pairs:
         if qa_pair.classify_id() == 5:  # Context + Ground Truth type
-            llm = OllamaChat()
+            if llm is None:
+                llm = OllamaChat()
             
             # Prompt for generating a question given context and answer
             prompt = f"""
@@ -306,22 +302,11 @@ Target Answer: {qa_pair.answer}
                     
                     # Copy original metadata and add generation info
                     new_pair.metadata = qa_pair.metadata.copy()
-                    new_pair.set_metadata('question_generation_method', 'paq_question_generation')
-                    new_pair.set_metadata('source_pair_id', qa_pair.id)
-                    new_pair.set_metadata('original_classification', qa_pair.classify())
-                    
                     generated_pairs.append(new_pair)
                     
-                    print(f"Generated question for pair {qa_pair.id}: {generated_question[:100]}...")
-                    
-                else:
-                    print(f"Failed to parse question from response for pair {qa_pair.id}: {response_text[:200]}...")
-                    
             except Exception as e:
-                print(f"Error generating question for pair {qa_pair.id}: {str(e)}")
                 continue
     
-    print(f"Generated questions for {len(generated_pairs)} QAPairs")
     return generated_pairs
 
 @Method(
@@ -331,7 +316,7 @@ Target Answer: {qa_pair.answer}
     use_LLM=True,
     complexity="O(n) where n is the number of context pairs; LLM calls may impact performance"
 )
-def paq_QA_generation(qa_pairs: List[QAPair], config, k: int = 3) -> List[QAPair]:
+def paq_QA_generation(qa_pairs: List[QAPair], config, k: int = 8, llm = None) -> List[QAPair]:
     """
     Combine PAQ-style answer extraction and question generation into a single method.
     
@@ -342,8 +327,8 @@ def paq_QA_generation(qa_pairs: List[QAPair], config, k: int = 3) -> List[QAPair
     Returns:
         List of complete QAPair objects with generated questions and extracted answers
     """
-    extracted_pairs = paq_answer_extraction(qa_pairs, config, k=k)
-    complete_pairs = paq_question_generation(extracted_pairs, config)
+    extracted_pairs = paq_answer_extraction(qa_pairs, config, k=k, llm=llm)
+    complete_pairs = paq_question_generation(extracted_pairs, config, llm=llm)
     return complete_pairs
 
 

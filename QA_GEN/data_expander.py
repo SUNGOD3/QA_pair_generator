@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 from .base import QAPair, QADataset
 from .methods import Method
 from .docker_manager import DockerMethodManager
+from tqdm import tqdm
 
 class DataExpander:
     """
@@ -46,7 +47,9 @@ class DataExpander:
             QADataset: Expanded dataset
         """
         expanded_dataset = dataset.copy()
-        for qa_pair in dataset:
+        
+        
+        for qa_pair in tqdm(dataset, desc="Expanding data"):
             current_type = qa_pair.classify_id()
             
             for target_type in range(1, 8):
