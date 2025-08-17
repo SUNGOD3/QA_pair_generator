@@ -17,7 +17,7 @@ def main():
     )
     
     # read data/psgs_w100.first_1000.tsv
-    with open('data/psgs_w100.first_1000.tsv', 'r', encoding='utf-8') as f:
+    with open('data_example/psgs_w100.first_1000.tsv', 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
         for row in reader:
             dataset.add(QAPair(context=row['text']))
