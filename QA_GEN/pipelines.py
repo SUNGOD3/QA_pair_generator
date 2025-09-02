@@ -1,6 +1,6 @@
 # pipeline.py
-from typing import List, Dict, Callable, Optional, Any
-from .base import QAPair, QADataset
+from typing import List, Dict, Optional, Any
+from .base import QADataset
 from .method_register import Method, MethodRegistry, load_all_methods
 from .data_expander import DataExpander
 from .llms.oai_chat import OpenAIChat

@@ -1,19 +1,15 @@
 #base.py
 from typing import Dict, List, Tuple, Any
-import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from collections import Counter
 from copy import deepcopy
 import json
-import os
 import pickle
 from pathlib import Path
 
-
-
 class QAPair:
-
+    
     def __init__(self, context: str = None, question: str = None, answer: str = None, 
                  metadata: Dict[str, Any] = None):
         self.id = None

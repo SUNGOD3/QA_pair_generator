@@ -9,7 +9,6 @@ from QA_GEN.methods.paq_question_generation import paq_question_generation
     description="paq_answer_extraction + paq_question_generation",
     applicable_stages=["data_expansion"],
     use_LLM=True,
-    complexity="O(n) where n is the number of context pairs; LLM calls may impact performance"
 )
 def paq_QA_generation(qa_pairs: List[QAPair], config, k: int = 8, llm = None) -> List[QAPair]:
     """

@@ -9,7 +9,6 @@ from nltk.tokenize import word_tokenize
     description="Augment QA pairs by randomly swapping pairs of words in questions n times",
     applicable_stages=["data_augmentation"],
     use_LLM=False,
-    complexity="O(m*n) where m is the number of QA pairs and n is the number of swaps per pair"
 )
 def word_swap_augmentation(qa_pairs: List[QAPair], config) -> List[QAPair]:
     """

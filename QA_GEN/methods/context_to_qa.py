@@ -11,7 +11,6 @@ from QA_GEN.method_register import Method
     applicable_stages=["data_expansion"],
     use_LLM=True,
     use_docker=False,
-    complexity="O(n) where n is the number of context pairs; LLM calls may impact performance"
 )
 def context_to_qa(qa_pairs: List[QAPair], config) -> List[QAPair]:
     """

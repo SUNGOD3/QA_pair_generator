@@ -5,6 +5,7 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional
 from pathlib import Path
 
+
 class Method:
     """
     Decorator class to automatically register methods with metadata.
@@ -20,7 +21,6 @@ class Method:
         applicable_stages: List[str], # List[str] = ["init_setup", "data_expansion", "build_knowledge_graph", "data_fusion", "data_filter", "data_augmentation"]
         use_LLM: bool = False,
         use_docker: bool = False,
-        complexity: str = None  # Optional field for describing complexity
     ):
         """
         Initialize a method with its metadata.
@@ -30,14 +30,12 @@ class Method:
             description (str): Detailed description of the method
             applicable_stages (List[str]): Stages where this method can be applied
             use_LLM (bool, optional): Whether the method uses LLM. Defaults to False.
-            complexity (str, optional): Description of method's time/space complexity. Optional field.
         """
         self.name = name
         self.description = description
         self.applicable_stages = applicable_stages
         self.use_LLM = use_LLM
         self.use_docker = use_docker
-        self.complexity = complexity
 
     def __call__(self, func: Callable):
         """
@@ -58,10 +56,6 @@ class Method:
             'use_LLM': self.use_LLM,
             'use_docker': self.use_docker
         }
-
-        # Only add complexity if provided
-        if self.complexity is not None:
-            method_info['complexity'] = self.complexity
             
         Method._methods[self.name] = method_info
         return func

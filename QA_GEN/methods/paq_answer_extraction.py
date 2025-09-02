@@ -9,7 +9,6 @@ from QA_GEN.method_register import Method
     description="Extract k candidate answer spans from context using PAQ-style answer extraction. Creates multiple QAPairs with the same context but different extracted answers, leaving questions empty for later generation.",
     applicable_stages=["data_expansion"],
     use_LLM=True,
-    complexity="O(n) where n is the number of context pairs; LLM calls may impact performance"
 )
 def paq_answer_extraction(qa_pairs: List[QAPair], config, k: int = 8, llm = None) -> List[QAPair]:
     """

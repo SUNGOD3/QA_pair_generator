@@ -9,7 +9,6 @@ from QA_GEN.method_register import Method
     description="Generate questions for QAPairs that have context and answer but missing questions (PAQ-style question generation). Converts Context+Answer pairs into complete QA pairs.",
     applicable_stages=["data_expansion"],
     use_LLM=True,
-    complexity="O(n) where n is the number of context+answer pairs; LLM calls may impact performance"
 )
 def paq_question_generation(qa_pairs: List[QAPair], config, llm = None) -> List[QAPair]:
     """
