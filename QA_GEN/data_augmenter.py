@@ -1,7 +1,7 @@
 #data_augmenter.py
 from typing import List, Dict, Any
 from .base import QAPair, QADataset
-from .methods import Method
+from .method_register import Method
 from .docker_manager import DockerMethodManager
 
 class DataAugmenter:

@@ -2,7 +2,7 @@
 from typing import List, Dict, Any, Set
 from collections import deque
 from .base import QADataset, QAPair
-from .methods import Method
+from .method_register import Method
 from .docker_manager import DockerMethodManager
 
 class DataFilter:

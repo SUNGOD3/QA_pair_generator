@@ -1,8 +1,7 @@
-#pipeline.py
+# pipeline.py
 from typing import List, Dict, Callable, Optional, Any
 from .base import QAPair, QADataset
-from .methods import Method
-from .docker_manager import DockerMethodManager
+from .method_register import Method, MethodRegistry, load_all_methods
 from .data_expander import DataExpander
 from .llms.oai_chat import OpenAIChat
 from .llms.ollama_chat import OllamaChat
@@ -11,13 +10,14 @@ from .data_fusioner import DataFusioner
 from .data_filter import DataFilter
 from .data_augmenter import DataAugmenter
 
+
 class Pipeline:
     """
     Flexible data processing pipeline for QA datasets.
-    Discovers and manages methods from methods.py dynamically.
+    Discovers and manages methods from methods/ directory dynamically.
     Supports disk-based storage for large-scale dataset processing.
     """
-    def __init__(self, stages: Optional[List[str]] = None):
+    def __init__(self, stages: Optional[List[str]] = None, methods_dir: str = "methods"):
         """
         Initialize Pipeline with customizable stages.
         
@@ -27,6 +27,7 @@ class Pipeline:
                                         ["data_expansion", "build_knowledge_graph", 
                                         "data_fusion", "data_filter", "data_augmentation"]
                                         If None, uses all default stages.
+            methods_dir (str): Directory containing method files. Defaults to "methods".
         
         Raises:
             ValueError: If any stage in the provided list is not available.
@@ -52,8 +53,73 @@ class Pipeline:
             
             self.stages = stages.copy()
         
-        # Initialize methods registration
-        self.methods_registered = {method: False for method in Method.get_methods().keys()}
+        # Initialize method registry and load methods
+        self.method_registry = MethodRegistry(methods_dir)
+        self.loaded_methods = {}
+        self.methods_registered = {}
+        
+        # Load all methods from the methods directory
+        self._load_methods()
+
+    def _load_methods(self):
+        """Load all methods from the methods directory."""
+        try:
+            print("Loading methods from methods directory...")
+            self.loaded_methods = self.method_registry.discover_and_load_methods()
+            
+            # Initialize registration status
+            self.methods_registered = {method: False for method in self.loaded_methods.keys()}
+            
+            # Validate loaded methods
+            validation_results = self.method_registry.validate_methods()
+            
+            if validation_results["errors"]:
+                print("Method validation errors:")
+                for error in validation_results["errors"]:
+                    print(f"  ERROR: {error}")
+            
+            if validation_results["warnings"]:
+                print("Method validation warnings:")
+                for warning in validation_results["warnings"]:
+                    print(f"  WARNING: {warning}")
+            
+            print(f"Successfully validated {len(validation_results['valid'])} methods")
+            
+        except Exception as e:
+            print(f"Error loading methods: {e}")
+            self.loaded_methods = {}
+            self.methods_registered = {}
+
+    def reload_methods(self):
+        """Reload all methods (useful for development)."""
+        print("Reloading methods...")
+        self._load_methods()
+
+    def list_available_methods(self, stage: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+        """
+        List available methods, optionally filtered by stage.
+        
+        Args:
+            stage (Optional[str]): Filter methods by stage
+        
+        Returns:
+            Dict[str, Dict[str, Any]]: Available methods
+        """
+        if stage:
+            return Method.get_methods_for_stage(stage)
+        return Method.get_methods()
+
+    def get_method_info(self, method_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed information about a specific method.
+        
+        Args:
+            method_name (str): Name of the method
+        
+        Returns:
+            Optional[Dict[str, Any]]: Method information or None if not found
+        """
+        return self.method_registry.get_method_info(method_name)
 
     def run(self, dataset: QADataset, config: Dict[str, Any]) -> QADataset:
         """
@@ -110,33 +176,51 @@ class Pipeline:
         # Auto-configure methods or use manual configuration
         if params.get('auto_config', True):
             dataset_description = dataset.description
-            for name, method in Method.get_methods().items():
-                llm = OllamaChat()
-                # LLM: Decide whether to use this method
-                method_description = method['description']
-                prompt = f"Given the dataset description '{dataset_description}' and method description '{method_description}', should we use this method? (yes/no)"
-                #response_text, response_info = llm(prompt=prompt)
-                #response_text = response_text.strip()
-                #response_text = response_text.strip('.,!?')
-                response_text = 'yes'  # Simulate LLM response for testing
-                if len(response_text) > 3:
-                    response_text = response_text[:3]
-                if response_text.lower() == 'yes' or response_text.lower() == 'y' or response_text.lower() == 'true':
-                    self.methods_registered[name] = True
-                    print(f"  Method '{name}' added to dataset.")
+            for name, method in self.loaded_methods.items():
+                if params.get('use_llm_for_method_selection', False):
+                    # Use LLM to decide whether to use this method
+                    llm = OllamaChat()
+                    method_description = method['description']
+                    prompt = f"Given the dataset description '{dataset_description}' and method description '{method_description}', should we use this method? Answer with 'yes' or 'no' only."
+                    
+                    try:
+                        response_text, response_info = llm(prompt=prompt)
+                        response_text = response_text.strip().lower()
+                        response_text = response_text.strip('.,!?')
+                        
+                        if len(response_text) > 3:
+                            response_text = response_text[:3]
+                            
+                        use_method = response_text in ['yes', 'y', 'true']
+                    except Exception as e:
+                        print(f"  Error in LLM method selection for '{name}': {e}")
+                        use_method = True  # Default to using the method if LLM fails
                 else:
-                    self.methods_registered[name] = False
-                    print(f"  Method '{name}' not applicable.")
+                    # Default to using all methods if not using LLM selection
+                    use_method = True
+                
+                self.methods_registered[name] = use_method
+                status = "added" if use_method else "not applicable"
+                print(f"  Method '{name}' {status}.")
         
-        # Manual method configuration
-        method = params.get('methods_to_run', [])
-        if method:
-            for method_name in method:
+        # Manual method configuration (overrides auto-config)
+        methods_to_run = params.get('methods_to_run', [])
+        if methods_to_run:
+            # First, disable all methods
+            for method_name in self.methods_registered:
+                self.methods_registered[method_name] = False
+            
+            # Then enable only specified methods
+            for method_name in methods_to_run:
                 if method_name in self.methods_registered:
                     self.methods_registered[method_name] = True
-                    print(f"  Method '{method_name}' added to dataset.")
+                    print(f"  Method '{method_name}' manually enabled.")
                 else:
-                    print(f"  Method '{method_name}' not found or not applicable.")
+                    print(f"  Method '{method_name}' not found in loaded methods.")
+        
+        # Print summary of enabled methods
+        enabled_methods = [name for name, enabled in self.methods_registered.items() if enabled]
+        print(f"Pipeline initialized with {len(enabled_methods)} enabled methods: {enabled_methods}")
         
         return dataset
 
@@ -155,15 +239,40 @@ class Pipeline:
         
         # Get expansion methods from registered Methods
         expansion_methods = []
-        for method_name, method_info in Method.get_methods().items():
-            if 'data_expansion' in method_info['applicable_stages'] and self.methods_registered.get(method_name, True):
+        stage_methods = Method.get_methods_for_stage('data_expansion')
+        
+        for method_name in stage_methods:
+            if self.methods_registered.get(method_name, False):
                 expansion_methods.append(method_name)
         
-        # Expand data using DataExpander
-        data_expander = DataExpander()
-        expanded_pairs = data_expander.expand_data(dataset, expansion_methods)
+        print(f"Using expansion methods: {expansion_methods}")
         
-        return expanded_pairs
+        # If we have a DataExpander class, use it
+        if hasattr(self, '_use_data_expander') and self._use_data_expander:
+            data_expander = DataExpander()
+            expanded_pairs = data_expander.expand_data(dataset, expansion_methods)
+        else:
+            # Direct method execution
+            expanded_pairs = []
+            for method_name in expansion_methods:
+                method_info = Method.get_methods()[method_name]
+                method_func = method_info['func']
+                
+                try:
+                    result = method_func(list(dataset.data.values()), config)
+                    if isinstance(result, list):
+                        expanded_pairs.extend(result)
+                    print(f"  Applied method '{method_name}': +{len(result) if isinstance(result, list) else 0} pairs")
+                except Exception as e:
+                    print(f"  Error applying method '{method_name}': {e}")
+            
+            # Create new dataset with expanded data
+            if expanded_pairs:
+                # Add expanded pairs to original dataset
+                all_pairs = list(dataset.data.values()) + expanded_pairs
+                dataset._initialize_dataset(all_pairs)
+        
+        return dataset
 
     def build_knowledge_graph(self, dataset: QADataset, params: dict):
         """
@@ -197,15 +306,32 @@ class Pipeline:
         
         # Get fusion methods from registered Methods
         fusion_methods = []
-        for method_name, method_info in Method.get_methods().items():
-            if 'data_fusion' in method_info['applicable_stages'] and self.methods_registered.get(method_name, True):
+        stage_methods = Method.get_methods_for_stage('data_fusion')
+        
+        for method_name in stage_methods:
+            if self.methods_registered.get(method_name, False):
                 fusion_methods.append(method_name)
         
-        # Initialize DataFusioner
-        fusioner = DataFusioner()
+        print(f"Using fusion methods: {fusion_methods}")
         
-        # Fuse data using the registered methods
-        fused_dataset = fusioner.fuse_data(dataset, fusion_methods, params)
+        # Initialize DataFusioner if available
+        if hasattr(self, '_use_data_fusioner') and self._use_data_fusioner:
+            fusioner = DataFusioner()
+            fused_dataset = fusioner.fuse_data(dataset, fusion_methods, params)
+        else:
+            # Direct method execution for fusion methods
+            fused_dataset = dataset
+            for method_name in fusion_methods:
+                method_info = Method.get_methods()[method_name]
+                method_func = method_info['func']
+                
+                try:
+                    result = method_func(fused_dataset, params)
+                    if result:
+                        fused_dataset = result
+                    print(f"  Applied fusion method '{method_name}'")
+                except Exception as e:
+                    print(f"  Error applying fusion method '{method_name}': {e}")
         
         return fused_dataset
 
@@ -300,21 +426,3 @@ class Pipeline:
         
         total_size = 0
         file_info = {}
-        
-        for file_path in disk_path.rglob("*"):
-            if file_path.is_file():
-                size = file_path.stat().st_size
-                total_size += size
-                file_info[file_path.name] = {
-                    "size_bytes": size,
-                    "size_mb": round(size / (1024 * 1024), 2)
-                }
-        
-        return {
-            "disk_enabled": True,
-            "path": str(disk_path),
-            "exists": True,
-            "total_size_bytes": total_size,
-            "total_size_mb": round(total_size / (1024 * 1024), 2),
-            "files": file_info
-        }

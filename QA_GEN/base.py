@@ -10,8 +10,7 @@ import os
 import pickle
 from pathlib import Path
 
-nltk.download('punkt_tab')
-nltk.download("stopwords")
+
 
 class QAPair:
 
