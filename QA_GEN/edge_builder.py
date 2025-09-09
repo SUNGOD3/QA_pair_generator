@@ -4,7 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-from collections import defaultdict
+from collections import defaultdict, deque
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from .base import QAPair, QADataset
@@ -63,7 +63,7 @@ class EdgeBuilder:
         # Update the edge in the dataset
         self.dataset.add_edge(source_id, target_id, method_name)
     
-    def build_cosine_similarity_edges(self, threshold: float = 0.5, method_name: str = "cosine_similarity"):
+    def build_cosine_similarity_edges(self, threshold: float = 0.2, method_name: str = "cosine_similarity"):
         """
         Build edges between QA pairs based on cosine similarity of their combined text.
         
@@ -112,7 +112,6 @@ class EdgeBuilder:
                     self.add_edge(qa_ids[i], qa_ids[j], method_name)
                     self.add_edge(qa_ids[j], qa_ids[i], method_name)
                     edges_created += 2
-        
         return edges_created
     
     def build_keyword_overlap_edges(self, threshold: int = 2, method_name: str = "keyword_overlap"):
@@ -149,6 +148,120 @@ class EdgeBuilder:
                     edges_created += 2
         
         return edges_created
+    
+    def _bfs_component(self, start_node: int, adjacency_dict: Dict[int, List[int]], visited: Set[int]) -> List[int]:
+        """
+        Perform BFS to find all nodes in the connected component starting from start_node.
+        
+        Args:
+            start_node: The starting node for BFS
+            adjacency_dict: Adjacency dictionary for the graph
+            visited: Set of already visited nodes
+            
+        Returns:
+            List of nodes in the connected component
+        """
+        component = []
+        queue = deque([start_node])
+        visited.add(start_node)
+        
+        while queue:
+            current_node = queue.popleft()
+            component.append(current_node)
+            
+            # Check outgoing edges
+            for neighbor in adjacency_dict.get(current_node, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+            
+            # Check incoming edges (since we want undirected connectivity)
+            for node_id, neighbors in adjacency_dict.items():
+                if current_node in neighbors and node_id not in visited:
+                    visited.add(node_id)
+                    queue.append(node_id)
+        
+        return component
+    
+    def get_rare_data_nodes(self, k: int = 3, method_name: Optional[str] = None) -> Tuple[List[int], Dict[str, List[List[int]]]]:
+        """
+        Find nodes that belong to small connected components (size <= k) in the graph.
+        These nodes represent rare or isolated data points.
+        
+        Args:
+            k: Maximum size of connected components to consider as "rare"
+            method_name: If provided, only use edges from this method. 
+                        If None, combine all methods.
+        
+        Returns:
+            Tuple containing:
+            - List of rare node IDs
+            - Dictionary mapping method names to lists of small components
+        """
+        rare_nodes = []
+        component_details = {}
+        
+        # Determine which methods to use
+        methods_to_use = [method_name] if method_name else list(self.methods)
+        
+        if not methods_to_use:
+            print("No edge methods available")
+            return [], {}
+        
+        for method in methods_to_use:
+            if method not in self.adjacency_lists:
+                print(f"Method '{method}' not found in adjacency lists")
+                continue
+            
+            # Get adjacency dictionary for this method
+            adjacency_dict = self.adjacency_lists[method]
+            
+            # Get all node IDs from the dataset
+            all_node_ids = {qa_pair.id for qa_pair in self.dataset}
+            
+            visited = set()
+            small_components = []
+            
+            # Find all connected components using BFS
+            for node_id in all_node_ids:
+                if node_id not in visited:
+                    component = self._bfs_component(node_id, adjacency_dict, visited)
+                    
+                    # Check if component size is <= k
+                    if len(component) <= k:
+                        small_components.append(component)
+                        rare_nodes.extend(component)
+            
+            component_details[method] = small_components
+        
+        # Remove duplicates while preserving order
+        rare_nodes = list(dict.fromkeys(rare_nodes))
+        
+        return rare_nodes, component_details
+    
+    def get_rare_data_qa_pairs(self, k: int = 3, method_name: Optional[str] = None) -> List[QAPair]:
+        """
+        Get the actual QAPair objects for rare data nodes.
+        
+        Args:
+            k: Maximum size of connected components to consider as "rare"
+            method_name: If provided, only use edges from this method
+        
+        Returns:
+            List of QAPair objects that are considered rare data
+        """
+        rare_node_ids, _ = self.get_rare_data_nodes(k, method_name)
+        
+        # Create a mapping from ID to QAPair for efficient lookup
+        id_to_qa = {qa_pair.id: qa_pair for qa_pair in self.dataset}
+        
+        # Get the corresponding QAPair objects
+        rare_qa_pairs = []
+        for node_id in rare_node_ids:
+            if node_id in id_to_qa:
+                rare_qa_pairs.append(id_to_qa[node_id])
+        
+        return rare_qa_pairs
     
     def get_edges_by_method(self, method_name: str) -> Dict[int, List[int]]:
         """

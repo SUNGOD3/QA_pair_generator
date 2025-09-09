@@ -9,7 +9,7 @@ def main():
     with optional disk storage support
     """
     # Create pipeline
-    pipeline = Pipeline(stages=["data_expansion"])
+    pipeline = Pipeline()
     
     # Create dataset - set use_disk=True for large datasets, False for small ones
     dataset = QADataset(
@@ -31,9 +31,6 @@ def main():
     # Run pipeline - same as original
     processed_dataset = pipeline.run(dataset, config)
     
-    # Print final results - same as original
-    for qa in processed_dataset:
-        print(qa)
 
 if __name__ == '__main__':
     main()

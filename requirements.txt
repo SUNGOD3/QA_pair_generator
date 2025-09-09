@@ -10,3 +10,4 @@ docker
 matplotlib
 networkx
 scikit-learn
+sentencepiece

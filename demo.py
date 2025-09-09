@@ -1,6 +1,5 @@
 #demo.py
 from QA_GEN import Pipeline, QADataset, QAPair
-from typing import List, Dict, Any
 
 def main():
     """
