@@ -37,3 +37,7 @@ pip install -r requirements.txt
 ```
 
 See demo.py/demo_boolQ/PAQ_demo for how to use it.
+
+Note: If the method you are using requires LLM, please enable [Ollama serve](https://github.com/ollama/ollama) or export your [OpenAI key](https://platform.openai.com/api-keys) first.
+
+Note: If you want to use custom methods or contribute PRs, please refer to method_register.py and the method implementation in the /methods folder.
