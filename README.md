@@ -3,7 +3,6 @@
 [![Google Slides](https://img.shields.io/badge/Google%20Slides-Presentation-blue?logo=google-slides&logoColor=white)](https://docs.google.com/presentation/d/1Ga9ogwiEXKRqdqsDmR9rGu8m2F2ue6CkTfkjj6or3L4/edit?usp=sharing)
 
 
-
 ## Problem to Solve
 
 The creation of high-quality QA datasets is fundamental for developing and evaluating modern question-answering (QA) systems.
@@ -19,6 +18,9 @@ AutoQA-Gen addresses these challenges by introducing a scalable and extensible f
 
 ## System Architecture
 
+![image](/img/system_workflow_of_AutoQA-Gen.png)
+
+
 AutoQA-Gen transforms raw data into high-quality QA pairs through a six-stage modular pipeline:
 
 1. Initialization – Input setup and preprocessing.
@@ -28,6 +30,9 @@ AutoQA-Gen transforms raw data into high-quality QA pairs through a six-stage mo
 5. Data Filtering – Ensuring quality control by removing low-value or redundant pairs.
 6. Data Augmentation – Expanding and diversifying QA pairs for robustness.
 
+Each step / stage contains multiple methods. You can think of a step as a method classification. The pipeline processes the QA dataset using a custom method sequence.
+
+![image](img/datastruct_relationship.drawio.png)
 
 ## Setup
 ```bash
