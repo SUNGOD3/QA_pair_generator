@@ -400,7 +400,7 @@ If you use AutoQA-Gen in your research, please cite:
 ```bibtex
 @software{autoqa_gen,
   title={AutoQA-Gen: Scalable QA Dataset Generation Framework},
-  author={SUNGOD},
+  author={Tai-Yang, Huang},
   year={2025},
   url={https://github.com/SUNGOD3/QA_pair_generator}
 }
