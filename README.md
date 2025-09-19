@@ -1,4 +1,4 @@
-# AutoQA-Gen: Scalable QA Dataset Generation Framework
+# AutoQA-Gen: Automated QA Dataset Generation and Quality Control from Method Design to System Integration
 
 [![Google Slides](https://img.shields.io/badge/Google%20Slides-Presentation-blue?logo=google-slides&logoColor=white)](https://docs.google.com/presentation/d/1Ga9ogwiEXKRqdqsDmR9rGu8m2F2ue6CkTfkjj6or3L4/edit?usp=sharing)
 
