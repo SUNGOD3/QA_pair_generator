@@ -1,7 +1,8 @@
 # AutoQA-Gen: Automated QA Dataset Generation and Quality Control from Method Design to System Integration
 
 [![Google Slides](https://img.shields.io/badge/Google%20Slides-Presentation-blue?logo=google-slides&logoColor=white)](https://docs.google.com/presentation/d/1Ga9ogwiEXKRqdqsDmR9rGu8m2F2ue6CkTfkjj6or3L4/edit?usp=sharing)
-[![Paper](https://img.shields.io/badge/Paper-Download-blue?logo=pdf&logoColor=white)](https://thesis.lib.nycu.edu.tw/items/51d04cc1-7905-4bb5-9dce-92bae3ddaf6b)
+[![Paper](https://img.shields.io/badge/Paper-Link-orange)](https://thesis.lib.nycu.edu.tw/items/51d04cc1-7905-4bb5-9dce-92bae3ddaf6b)
+
 
 AutoQA-Gen is a modular and extensible framework for generating high-quality question-answer (QA) datasets from raw text data. It addresses the challenges of limited flexibility, high annotation costs, and lack of systematic quality control in QA dataset creation.
 
